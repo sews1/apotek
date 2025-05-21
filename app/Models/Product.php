@@ -20,12 +20,16 @@ class Product extends Model
         'min_stock',
         'unit',
         'barcode',
-        'image'
+        'image',
+        'entry_date',      // Ditambahkan
+        'expired_date',    // Ditambahkan
     ];
 
     protected $casts = [
         'purchase_price' => 'decimal:2',
         'selling_price' => 'decimal:2',
+        'entry_date' => 'date',       // Casting ke objek tanggal
+        'expired_date' => 'date',     // Casting ke objek tanggal
     ];
 
     public function category()
@@ -72,14 +76,9 @@ class Product extends Model
         return $query;
     }
 
+    // Optional, sudah ada accessor getStockStatusAttribute di atas
     public function getStockStatus()
     {
-        if ($this->stock <= 0) {
-            return 'out_of_stock';
-        } elseif ($this->stock <= $this->min_stock) {
-            return 'low_stock';
-        } else {
-            return 'in_stock';
-        }
+        return $this->getStockStatusAttribute();
     }
 }

@@ -5,6 +5,8 @@ import Authenticated from '@/Layouts/Authenticated';
 export default function Create({ auth }) {
     const { data, setData, post, processing, errors } = useForm({
         name: '',
+        kode_prefix: '',
+        slug: '',
         description: '',
         is_active: true,
     });
@@ -22,6 +24,8 @@ export default function Create({ auth }) {
                 <div className="bg-white shadow rounded-lg p-6">
                     <form onSubmit={handleSubmit}>
                         <div className="space-y-6">
+
+                            {/* Nama Kategori */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nama Kategori*</label>
                                 <input
@@ -34,6 +38,33 @@ export default function Create({ auth }) {
                                 {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
                             </div>
 
+                            {/* Kode Produk */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Kode Produk*</label>
+                                <input
+                                    type="text"
+                                    className={`w-full px-3 py-2 border rounded-md uppercase ${errors.kode_prefix ? 'border-red-500' : 'border-gray-300'}`}
+                                    value={data.kode_prefix}
+                                    onChange={(e) => setData('kode_prefix', e.target.value.toUpperCase())}
+                                    placeholder="Contoh: OBB"
+                                />
+                                {errors.kode_prefix && <p className="mt-1 text-sm text-red-600">{errors.kode_prefix}</p>}
+                            </div>
+
+                            {/* Slug */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Slug*</label>
+                                <input
+                                    type="text"
+                                    className={`w-full px-3 py-2 border rounded-md lowercase ${errors.slug ? 'border-red-500' : 'border-gray-300'}`}
+                                    value={data.slug}
+                                    onChange={(e) => setData('slug', e.target.value.toLowerCase())}
+                                    placeholder="Contoh: obat-bebas"
+                                />
+                                {errors.slug && <p className="mt-1 text-sm text-red-600">{errors.slug}</p>}
+                            </div>
+
+                            {/* Deskripsi */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
                                 <textarea
@@ -45,6 +76,7 @@ export default function Create({ auth }) {
                                 />
                             </div>
 
+                            {/* Checkbox Aktif */}
                             <div className="flex items-center">
                                 <input
                                     id="is_active"
@@ -59,6 +91,7 @@ export default function Create({ auth }) {
                             </div>
                         </div>
 
+                        {/* Tombol */}
                         <div className="mt-6 flex justify-end space-x-3">
                             <Link
                                 href={route('categories.index')}

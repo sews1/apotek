@@ -14,13 +14,13 @@ class Sale extends Model
         'invoice_number',
         'user_id',
         'customer_name',
-        'customer_phone',
+        // 'customer_phone',
         'total',
         'payment_amount',
         'change_amount',
         'payment_method',
-        'status',
-        'notes'
+        // 'status',
+        // 'notes'
     ];
 
     protected $casts = [

@@ -3,20 +3,6 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { Inertia } from '@inertiajs/inertia';
 import Authenticated from '@/Layouts/Authenticated';
 
-const stockStatusLabels = {
-    out_of_stock: 'Habis',
-    low_stock: 'Stok Rendah',
-    in_stock: 'Tersedia',
-    unknown: 'Tidak Diketahui',
-};
-
-const stockStatusClasses = {
-    out_of_stock: 'bg-red-100 text-red-800',
-    low_stock: 'bg-yellow-100 text-yellow-800',
-    in_stock: 'bg-green-100 text-green-800',
-    unknown: 'bg-gray-100 text-gray-800',
-};
-
 const formatDate = (dateString) => {
     if (!dateString) return '-';
     return new Intl.DateTimeFormat('id-ID', {
@@ -26,21 +12,21 @@ const formatDate = (dateString) => {
     }).format(new Date(dateString));
 };
 
-export default function Index() {
+export default function Expired() {
     const { products, auth } = usePage().props;
 
     return (
         <Authenticated user={auth.user}>
-            <Head title="Produk" />
+            <Head title="Produk Kadaluwarsa" />
 
             <div className="container mx-auto p-6">
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-gray-800">Daftar Produk</h1>
+                    <h1 className="text-3xl font-bold text-gray-800">Produk Kadaluwarsa</h1>
                     <Link
-                        href={route('products.create')}
-                        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md shadow hover:bg-blue-700 transition"
+                        href={route('products.index')}
+                        className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-md shadow hover:bg-gray-700 transition"
                     >
-                        + Tambah Produk
+                        &larr; Kembali ke Daftar Produk
                     </Link>
                 </div>
 
@@ -53,9 +39,7 @@ export default function Index() {
                                 <th className="px-6 py-3 text-left">Kategori</th>
                                 <th className="px-6 py-3 text-left">Harga Jual</th>
                                 <th className="px-6 py-3 text-left">Stok</th>
-                                <th className="px-6 py-3 text-left">Masuk</th>
-                                <th className="px-6 py-3 text-left">Expired</th>
-                                <th className="px-6 py-3 text-left">Status</th>
+                                <th className="px-6 py-3 text-left">Tanggal Expired</th>
                                 <th className="px-6 py-3 text-left">Aksi</th>
                             </tr>
                         </thead>
@@ -63,31 +47,11 @@ export default function Index() {
                             {products.data.map(product => (
                                 <tr key={product.id} className="hover:bg-gray-50 transition">
                                     <td className="px-6 py-4 whitespace-nowrap">{product.code}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            {product.image && (
-                                                <img
-                                                    src={product.image.startsWith('http') ? product.image : `/storage/${product.image}`}
-                                                    alt={product.name}
-                                                    className="w-10 h-10 rounded-full object-cover mr-3 border"
-                                                />
-                                            )}
-                                            <span>{product.name}</span>
-                                        </div>
-                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{product.name}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">{product.category?.name || '-'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">Rp {product.selling_price.toLocaleString('id-ID')}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        {product.stock} {product.unit || ''}
-                                        <div className="text-xs text-gray-500">Min: {product.min_stock}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">{formatDate(product.entry_date)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">{formatDate(product.expired_date)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`px-2 py-1 inline-flex text-xs font-semibold rounded-full ${stockStatusClasses[product.stock_status] || stockStatusClasses.unknown}`}>
-                                            {stockStatusLabels[product.stock_status] || stockStatusLabels.unknown}
-                                        </span>
-                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{product.stock} {product.unit || ''}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-red-600 font-semibold">{formatDate(product.expired_date)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                                         <Link
                                             href={route('products.edit', product.id)}
@@ -111,13 +75,31 @@ export default function Index() {
 
                             {products.data.length === 0 && (
                                 <tr>
-                                    <td colSpan="9" className="px-6 py-4 text-center text-gray-500">
-                                        Tidak ada produk tersedia.
+                                    <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                                        Tidak ada produk kadaluwarsa.
                                     </td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Pagination */}
+                <div className="mt-4">
+                    {products.links && (
+                        <nav className="inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                            {products.links.map((link, index) => (
+                                <Link
+                                    key={index}
+                                    href={link.url}
+                                    className={`relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium ${
+                                        link.active ? 'z-10 bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                />
+                            ))}
+                        </nav>
+                    )}
                 </div>
             </div>
         </Authenticated>

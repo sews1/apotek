@@ -7,6 +7,8 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Api\SaleController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -63,6 +65,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{product}/edit', [ProductController::class, 'edit'])->name('edit');
         Route::put('/{product}', [ProductController::class, 'update'])->name('products.update'); // Corrected here
         Route::delete('/{product}', [ProductController::class, 'destroy'])->name('destroy');
+        Route::get('/expired', [ProductController::class, 'expiredProducts'])->name('expired');
+
     });
 
     // API for product search
@@ -76,6 +80,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/', [SaleController::class, 'store'])->name('store');
         Route::get('/{sale}', [SaleController::class, 'show'])->name('show');
         Route::get('/{sale}/invoice', [SaleController::class, 'invoice'])->name('invoice');
+        Route::get('/sales/{sale}/invoice-pdf', [SaleController::class, 'downloadInvoice'])->name('sales.invoice.pdf');
 
     });
 
@@ -94,6 +99,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('/{category}', [CategoryController::class, 'update'])->name('update');
         Route::delete('/{category}', [CategoryController::class, 'destroy'])->name('destroy');
         Route::patch('/{category}/restore', [CategoryController::class, 'restore'])->name('restore');
+    });
+
+     Route::prefix('suppliers')->name('suppliers.')->group(function () {
+        Route::get('/', [SupplierController::class, 'index'])->name('index');
+        Route::get('/create', [SupplierController::class, 'create'])->name('create');
+        Route::post('/', [SupplierController::class, 'store'])->name('store');
+        Route::get('/{supplier}/edit', [SupplierController::class, 'edit'])->name('edit');
+        Route::put('/{supplier}', [SupplierController::class, 'update'])->name('update');
+        Route::delete('/{supplier}', [SupplierController::class, 'destroy'])->name('destroy');
+    });
+
+   Route::prefix('reports')->group(function () {
+    Route::get('/', [ReportController::class, 'index'])->name('reports.index');
+    Route::get('/weekly', [ReportController::class, 'weekly'])->name('weekly');
+    Route::get('/monthly', [ReportController::class, 'monthly'])->name('monthly');
+    Route::get('/yearly', [ReportController::class, 'yearly'])->name('yearly');
     });
 });
 

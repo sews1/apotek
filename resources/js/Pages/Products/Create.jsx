@@ -1,10 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import Authenticated from '@/Layouts/Authenticated';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { Inertia } from '@inertiajs/inertia';
 
 export default function Create({ auth, categories }) {
-  const [autoCode, setAutoCode] = useState('');
   const { data, setData, post, errors, processing } = useForm({
     code: '',
     name: '',
@@ -15,34 +13,30 @@ export default function Create({ auth, categories }) {
     stock: '',
     min_stock: '',
     unit: '',
+    entry_date: '',
+    expired_date: '',
     image: null,
   });
 
   useEffect(() => {
     if (data.category_id) {
-      const selectedCategory = categories.find(cat => cat.id === parseInt(data.category_id));
-      if (selectedCategory) {
-        const prefix = getPrefixByCategory(selectedCategory.name);
-        fetch(`/api/products/last-code?category_id=${data.category_id}`)
-          .then(res => res.json())
-          .then(result => {
-            setData('code', result.code);
-            setAutoCode(result.code);
-          });
-      }
+      fetch(`/api/products/last-code?category_id=${data.category_id}`)
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch code');
+          return res.json();
+        })
+        .then(result => {
+          if (result.code) {
+            setData('code', result.code);  // Set kode produk otomatis di form data
+          }
+        })
+        .catch(() => {
+          setData('code', ''); // Reset kode jika error fetch
+        });
+    } else {
+      setData('code', ''); // Reset kode jika kategori belum dipilih
     }
   }, [data.category_id]);
-
-  const getPrefixByCategory = (categoryName) => {
-    switch (categoryName) {
-      case 'Obat Bebas': return 'OBB';
-      case 'Obat Bebas Terbatas': return 'OBT';
-      case 'Obat Keras': return 'OBK';
-      case 'Alat Kesehatan': return 'ALK';
-      case 'Perawatan Tubuh': return 'PRT';
-      default: return 'PRD';  // Default prefix for other categories
-    }
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -78,16 +72,16 @@ export default function Create({ auth, categories }) {
 
           <div>
             <label className="block font-medium">Kode Produk</label>
-            <input
-              type="text"
-              value={autoCode}
-              onChange={e => setData('code', e.target.value)}
-              className="mt-1 w-full border rounded p-2 bg-gray-100"
-              readOnly
-            />
+              <input
+                type="text"
+                value={data.code}
+                onChange={e => setData('code', e.target.value)}
+                className="mt-1 w-full border rounded p-2"
+              />
             {errors.code && <div className="text-red-500 text-sm">{errors.code}</div>}
           </div>
 
+          {/* Input nama produk */}
           <div>
             <label className="block font-medium">Nama Produk</label>
             <input
@@ -100,6 +94,7 @@ export default function Create({ auth, categories }) {
             {errors.name && <div className="text-red-500 text-sm">{errors.name}</div>}
           </div>
 
+          {/* Deskripsi */}
           <div>
             <label className="block font-medium">Deskripsi</label>
             <textarea
@@ -110,6 +105,7 @@ export default function Create({ auth, categories }) {
             {errors.description && <div className="text-red-500 text-sm">{errors.description}</div>}
           </div>
 
+          {/* Harga beli dan jual */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-medium">Harga Beli</label>
@@ -135,6 +131,7 @@ export default function Create({ auth, categories }) {
             </div>
           </div>
 
+          {/* Stok dan minimal stok */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-medium">Stok</label>
@@ -160,6 +157,33 @@ export default function Create({ auth, categories }) {
             </div>
           </div>
 
+          {/* Tanggal masuk dan expired */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block font-medium">Tanggal Produk Masuk</label>
+              <input
+                type="date"
+                value={data.entry_date}
+                onChange={e => setData('entry_date', e.target.value)}
+                className="mt-1 w-full border rounded p-2"
+                required
+              />
+              {errors.entry_date && <div className="text-red-500 text-sm">{errors.entry_date}</div>}
+            </div>
+            <div>
+              <label className="block font-medium">Tanggal Kadaluwarsa</label>
+              <input
+                type="date"
+                value={data.expired_date}
+                onChange={e => setData('expired_date', e.target.value)}
+                className="mt-1 w-full border rounded p-2"
+                required
+              />
+              {errors.expired_date && <div className="text-red-500 text-sm">{errors.expired_date}</div>}
+            </div>
+          </div>
+
+          {/* Satuan */}
           <div>
             <label className="block font-medium">Satuan</label>
             <input
@@ -172,6 +196,7 @@ export default function Create({ auth, categories }) {
             {errors.unit && <div className="text-red-500 text-sm">{errors.unit}</div>}
           </div>
 
+          {/* Gambar */}
           <div>
             <label className="block font-medium">Gambar</label>
             <input
@@ -182,6 +207,7 @@ export default function Create({ auth, categories }) {
             {errors.image && <div className="text-red-500 text-sm">{errors.image}</div>}
           </div>
 
+          {/* Submit button */}
           <div className="pt-4">
             <button
               type="submit"

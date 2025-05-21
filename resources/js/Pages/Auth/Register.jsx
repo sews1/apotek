@@ -16,14 +16,14 @@ export default function Register() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <Head title="Register" />
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 py-12 px-4 sm:px-6 lg:px-8">
+            <Head title="Daftar - Hero Farma" />
             
-            <div className="max-w-md w-full space-y-8">
-                <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                        Buat Akun Baru
-                    </h2>
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 space-y-8">
+                <div className="text-center mb-6">
+                    <img src="/images/logo-hero-farma.png" alt="Hero Farma Logo" className="h-16 mx-auto mb-3" />
+                    <h2 className="text-3xl font-extrabold text-blue-600">Buat Akun Baru</h2>
+                    <p className="text-sm text-gray-500">Sistem Penjualan Apotek</p>
                 </div>
 
                 <form className="mt-8 space-y-6" onSubmit={submit}>

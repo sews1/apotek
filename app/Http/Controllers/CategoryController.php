@@ -30,6 +30,8 @@ class CategoryController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|unique:categories|max:50',
+            'slug' => 'required|unique:categories|max:50',
+            'kode_prefix' => 'required|string|max:10',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ]);
@@ -50,7 +52,8 @@ class CategoryController extends Controller
     public function update(Request $request, Category $category)
     {
         $validated = $request->validate([
-            'name' => 'required|max:50|unique:categories,name,'.$category->id,
+            'name' => 'required|max:50|unique:categories,name,' . $category->id,
+            'kode_prefix' => 'required|string|max:10|unique:categories,kode_prefix,' . $category->id,
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ]);

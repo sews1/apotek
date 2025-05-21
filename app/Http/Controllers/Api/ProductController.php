@@ -8,6 +8,7 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use Carbon\Carbon;
 
 class ProductController extends Controller
 {
@@ -48,6 +49,32 @@ class ProductController extends Controller
         ]);
     }
 
+    public function expiredProducts(Request $request)
+    {
+        $query = Product::with('category')
+            ->whereNotNull('expired_date')
+            ->whereDate('expired_date', '<', Carbon::today());
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%$search%")
+                  ->orWhere('code', 'like', "%$search%");
+            });
+        }
+
+        if ($category = $request->input('category')) {
+            $query->where('category_id', $category);
+        }
+
+        $expiredProducts = $query->latest('expired_date')->paginate(10)->withQueryString();
+
+        return Inertia::render('Products/Expired', [
+            'expiredProducts' => $expiredProducts,
+            'categories' => Category::all(),
+            'filters' => $request->only(['search', 'category']),
+        ]);
+    }
+
     public function create()
     {
         return Inertia::render('Products/Create', [
@@ -67,6 +94,8 @@ class ProductController extends Controller
             'stock' => 'required|integer|min:0',
             'min_stock' => 'required|integer|min:1',
             'unit' => 'required|string|max:20',
+            'entry_date' => 'nullable|date',
+            'expired_date' => 'nullable|date|after_or_equal:entry_date',
             'image' => 'nullable|image|max:2048',
         ]);
 
@@ -106,6 +135,8 @@ class ProductController extends Controller
             'stock' => 'required|integer|min:0',
             'min_stock' => 'required|integer|min:1',
             'unit' => 'required|string|max:20',
+            'entry_date' => 'nullable|date',
+            'expired_date' => 'nullable|date|after_or_equal:entry_date',
             'image' => 'nullable|image|max:2048',
         ]);
 
@@ -134,9 +165,10 @@ class ProductController extends Controller
 
     public function search(Request $request)
     {
+        $term = $request->input('term', '');
         return Product::select('id', 'code', 'name', 'selling_price', 'stock')
-            ->where('name', 'like', '%' . $request->term . '%')
-            ->orWhere('code', 'like', '%' . $request->term . '%')
+            ->where('name', 'like', '%' . $term . '%')
+            ->orWhere('code', 'like', '%' . $term . '%')
             ->limit(10)
             ->get();
     }
@@ -155,21 +187,32 @@ class ProductController extends Controller
             return response()->json(['error' => 'Category not found'], 404);
         }
 
-        // Buat prefix dari nama kategori, misalnya: "OBB" untuk Obat Bebas
-        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category->name), 0, 3));
+        $prefix = $this->getPrefixByCategory($category->name);
 
-        $lastProduct = Product::where('code', 'like', "$prefix-%")
-                        ->orderByDesc('id')
-                        ->first();
+        $lastProduct = Product::where('code', 'like', "$prefix%")
+            ->orderByDesc('code')
+            ->first();
 
-        if ($lastProduct && preg_match('/\d+$/', $lastProduct->code, $matches)) {
-            $number = (int)$matches[0] + 1;
+        if ($lastProduct && preg_match('/(\d+)$/', $lastProduct->code, $matches)) {
+            $number = (int)$matches[1] + 1;
         } else {
             $number = 1;
         }
 
-        $newCode = sprintf('%s-%03d', $prefix, $number);
+        $newCode = sprintf('%s%04d', $prefix, $number);
 
         return response()->json(['code' => $newCode]);
+    }
+
+    private function getPrefixByCategory(string $categoryName): string
+    {
+        return match ($categoryName) {
+            'Obat Bebas' => 'OBB',
+            'Obat Bebas Terbatas' => 'OBT',
+            'Obat Keras' => 'OBK',
+            'Alat Kesehatan' => 'ALK',
+            'Perawatan Tubuh' => 'PRT',
+            default => 'PRD',
+        };
     }
 }

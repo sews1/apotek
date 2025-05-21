@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Head, useForm } from '@inertiajs/react';
 import Authenticated from '@/Layouts/Authenticated';
+import { FaPlus, FaTrashAlt } from 'react-icons/fa';
+import Swal from 'sweetalert2';
+
 
 export default function Create({ auth, products }) {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -18,11 +21,13 @@ export default function Create({ auth, products }) {
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [quantity, setQuantity] = useState(1);
 
+    // Filter products based on search term
     const filteredProducts = products.filter(product =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.code.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    // Add selected product to cart
     const addToCart = () => {
         if (!selectedProduct || quantity < 1 || quantity > selectedProduct.stock) return;
 
@@ -30,18 +35,10 @@ export default function Create({ auth, products }) {
 
         if (existingItem) {
             const newQuantity = existingItem.quantity + quantity;
-            if (newQuantity > selectedProduct.stock) {
-                alert('Stok tidak mencukupi!');
-                return;
-            }
-
+            if (newQuantity > selectedProduct.stock) return alert('Stok tidak mencukupi!');
             setCart(cart.map(item =>
                 item.product_id === selectedProduct.id
-                    ? {
-                        ...item,
-                        quantity: newQuantity,
-                        subtotal: selectedProduct.selling_price * newQuantity
-                    }
+                    ? { ...item, quantity: newQuantity, subtotal: item.price * newQuantity }
                     : item
             ));
         } else {
@@ -52,7 +49,7 @@ export default function Create({ auth, products }) {
                     name: selectedProduct.name,
                     code: selectedProduct.code,
                     price: selectedProduct.selling_price,
-                    quantity: quantity,
+                    quantity,
                     subtotal: selectedProduct.selling_price * quantity,
                     stock: selectedProduct.stock,
                 }
@@ -63,285 +60,254 @@ export default function Create({ auth, products }) {
         setQuantity(1);
     };
 
+    // Remove item from cart
     const removeFromCart = (productId) => {
         setCart(cart.filter(item => item.product_id !== productId));
     };
 
+    // Update item quantity in cart
     const updateQuantity = (productId, newQuantity) => {
         const qty = parseInt(newQuantity);
         if (qty < 1) return;
 
         const item = cart.find(item => item.product_id === productId);
-        if (qty > item.stock) {
-            alert('Stok tidak mencukupi!');
-            return;
-        }
+        if (qty > item.stock) return alert('Stok tidak mencukupi!');
 
         setCart(cart.map(item =>
             item.product_id === productId
-                ? {
-                    ...item,
-                    quantity: qty,
-                    subtotal: item.price * qty,
-                }
+                ? { ...item, quantity: qty, subtotal: item.price * qty }
                 : item
         ));
     };
 
+    // Calculate total and change amount
     const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
     const changeAmount = data.payment_amount - total;
 
+    // Submit sale transaction
     const submitSale = () => {
-        if (cart.length === 0) {
-            alert('Keranjang masih kosong!');
-            return;
-        }
-
-        setData(data => ({
-            ...data,
-            items: cart.map(item => ({
-                product_id: item.product_id,
-                price: item.price,
-                quantity: item.quantity,
-                subtotal: item.subtotal,
-            })),
-            total,
-            total_amount: total,
-            change_amount: data.payment_amount - total,
-        }));
-
-        post(route('sales.store'), {
-            onSuccess: () => {
-                reset();
-                setCart([]);
-                alert('Transaksi berhasil disimpan.');
-            }
+    if (cart.length === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Keranjang kosong!',
+            text: 'Silakan tambahkan produk terlebih dahulu.',
         });
-    };
+        return;
+    }
 
-    return (
-        <Authenticated auth={auth} header="Transaksi Baru">
-            <Head title="Transaksi Baru" />
+    if (data.payment_amount < total) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Pembayaran tidak mencukupi!',
+            text: 'Jumlah pembayaran kurang dari total belanja.',
+        });
+        return;
+    }
 
-            <div className="py-6 px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Produk */}
-                    <div className="lg:col-span-2 space-y-4">
-                        {/* Cari Produk */}
-                        <div className="bg-white shadow rounded-lg p-4">
-                            <h2 className="text-lg font-semibold mb-4">Pilih Produk</h2>
-                            <input
-                                type="text"
-                                placeholder="Cari produk..."
-                                className="w-full px-4 py-2 border rounded-md"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                {filteredProducts.map(product => (
-                                    <div
-                                        key={product.id}
-                                        className={`border rounded-md p-3 cursor-pointer hover:bg-gray-50 ${
-                                            selectedProduct?.id === product.id ? 'bg-blue-50 border-blue-300' : ''
-                                        }`}
-                                        onClick={() => setSelectedProduct(product)}
-                                    >
-                                        <div className="font-medium">{product.name}</div>
-                                        <div className="text-sm text-gray-500">{product.code}</div>
-                                        <div className="text-green-600 font-bold mt-1">
-                                            Rp {product.price_formatted}
-                                        </div>
-                                        <div className="text-xs text-gray-500 mt-1">Stok: {product.stock}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+    setData({
+        ...data,
+        items: cart.map(item => ({
+            product_id: item.product_id,
+            price: item.price,
+            quantity: item.quantity,
+            subtotal: item.subtotal,
+        })),
+        total,
+        total_amount: total,
+        change_amount: changeAmount,
+    });
 
-                        {/* Tambah Produk */}
-                        {selectedProduct && (
-                            <div className="bg-white shadow rounded-lg p-4">
-                                <h3 className="font-medium mb-2">{selectedProduct.name}</h3>
-                                <div className="flex items-center space-x-4">
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max={selectedProduct.stock}
-                                        className="w-20 px-3 py-2 border rounded-md"
-                                        value={quantity}
-                                        onChange={(e) => {
-                                            const value = parseInt(e.target.value || 1);
-                                            setQuantity(Math.min(value, selectedProduct.stock));
-                                        }}
-                                    />
-                                    <button
-                                        onClick={addToCart}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                    >
-                                        Tambahkan
-                                    </button>
-                                    <button
-                                        onClick={() => setSelectedProduct(null)}
-                                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-                                    >
-                                        Batal
-                                    </button>
+    post(route('sales.store'), {
+        onSuccess: () => {
+            reset();
+            setCart([]);
+            Swal.fire({
+                icon: 'success',
+                title: 'Berhasil!',
+                text: 'Transaksi berhasil disimpan.',
+                timer: 2000,
+                showConfirmButton: false,
+            });
+        }
+    });
+};
+
+
+return (
+    <Authenticated auth={auth} header="Transaksi Baru">
+        <Head title="Transaksi Baru" />
+
+        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Bagian Produk & Keranjang */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Pencarian Produk */}
+                    <div className="bg-white p-6 rounded-2xl shadow-md">
+                        <h2 className="text-2xl font-semibold mb-4 text-gray-800">Cari Produk</h2>
+                        <input
+                            type="text"
+                            placeholder="Cari berdasarkan nama atau kode produk..."
+                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-6">
+                            {filteredProducts.map(product => (
+                                <div
+                                    key={product.id}
+                                    onClick={() => setSelectedProduct(product)}
+                                    className={`cursor-pointer p-4 border rounded-xl shadow-sm hover:shadow-lg transition ${
+                                        selectedProduct?.id === product.id ? 'bg-blue-100 border-blue-500' : ''
+                                    }`}
+                                >
+                                    <h3 className="font-semibold text-gray-800">{product.name}</h3>
+                                    <p className="text-xs text-gray-500">{product.code}</p>
+                                    <p className="text-green-600 font-bold mt-2">Rp {product.price_formatted}</p>
+                                    <p className="text-xs text-gray-500">Stok: {product.stock}</p>
                                 </div>
-                            </div>
-                        )}
-
-                        {/* Keranjang */}
-                        <div className="bg-white shadow rounded-lg p-4">
-                            <h2 className="text-lg font-semibold mb-4">Keranjang Belanja</h2>
-                            {cart.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500">
-                                    Belum ada produk di keranjang
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {cart.map((item, index) => (
-                                        <div key={index} className="flex items-center justify-between p-3 border-b">
-                                            <div className="flex-1">
-                                                <div className="font-medium">{item.name}</div>
-                                                <div className="text-sm text-gray-500">{item.code}</div>
-                                            </div>
-                                            <div className="flex items-center space-x-4">
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    max={item.stock}
-                                                    className="w-16 px-2 py-1 border rounded text-center"
-                                                    value={item.quantity}
-                                                    onChange={(e) => updateQuantity(item.product_id, e.target.value)}
-                                                />
-                                                <div className="w-24 text-right font-medium">
-                                                    Rp {item.subtotal.toLocaleString('id-ID')}
-                                                </div>
-                                                <button
-                                                    onClick={() => removeFromCart(item.product_id)}
-                                                    className="text-red-500 hover:text-red-700"
-                                                >
-                                                    ❌
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            ))}
                         </div>
                     </div>
 
-                    {/* Pembayaran */}
-                    <div className="space-y-4">
-                        <div className="bg-white shadow rounded-lg p-4">
-                            <h2 className="text-lg font-semibold mb-4">Pembayaran</h2>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Total Belanja
-                                    </label>
-                                    <div className="text-2xl font-bold text-green-600">
-                                        Rp {total.toLocaleString('id-ID')}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        User Id (Opsional)
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 border rounded-md"
-                                        value={data.user_id}
-                                        onChange={(e) => setData('user_id', e.target.value)}
-                                    />
-                                    {errors.user_id && (
-                                        <div className="text-red-500 text-sm mt-1">{errors.user_id}</div>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Invoice Number (Opsional)
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 border rounded-md"
-                                        value={data.invoice_number}
-                                        onChange={(e) => setData('invoice_number', e.target.value)}
-                                    />
-                                    {errors.invoice_number && (
-                                        <div className="text-red-500 text-sm mt-1">{errors.invoice_number}</div>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Nama Pelanggan (Opsional)
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 border rounded-md"
-                                        value={data.customer_name}
-                                        onChange={(e) => setData('customer_name', e.target.value)}
-                                    />
-                                    {errors.customer_name && (
-                                        <div className="text-red-500 text-sm mt-1">{errors.customer_name}</div>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Metode Pembayaran
-                                    </label>
-                                    <select
-                                        className="w-full px-3 py-2 border rounded-md"
-                                        value={data.payment_method}
-                                        onChange={(e) => setData('payment_method', e.target.value)}
-                                    >
-                                        <option value="cash">Tunai</option>
-                                        <option value="debit">Debit Card</option>
-                                        <option value="credit">Credit Card</option>
-                                    </select>
-                                    {errors.payment_method && (
-                                        <div className="text-red-500 text-sm mt-1">{errors.payment_method}</div>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Jumlah Bayar
-                                    </label>
-                                    <input
-                                        type="number"
-                                        className="w-full px-3 py-2 border rounded-md"
-                                        value={data.payment_amount}
-                                        onChange={(e) => setData('payment_amount', parseInt(e.target.value || 0))}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Kembalian
-                                    </label>
-                                    <div className="text-xl font-semibold text-blue-600">
-                                        Rp {changeAmount > 0 ? changeAmount.toLocaleString('id-ID') : 0}
-                                    </div>
-                                </div>
-
+                    {/* Tambah Produk Terpilih */}
+                    {selectedProduct && (
+                        <div className="bg-white p-6 rounded-2xl shadow-md">
+                            <h3 className="text-lg font-bold mb-2">{selectedProduct.name}</h3>
+                            <div className="flex items-center gap-4">
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max={selectedProduct.stock}
+                                    className="w-24 px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={quantity}
+                                    onChange={(e) => {
+                                        const val = parseInt(e.target.value) || 1;
+                                        setQuantity(Math.min(val, selectedProduct.stock));
+                                    }}
+                                />
                                 <button
-                                    onClick={submitSale}
-                                    disabled={processing || cart.length === 0}
-                                    className={`w-full py-3 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 ${
-                                        processing || cart.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                                    }`}
+                                    onClick={addToCart}
+                                    className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition flex items-center gap-2"
                                 >
-                                    {processing ? 'Memproses...' : 'Simpan Transaksi'}
+                                    <FaPlus /> Tambah
+                                </button>
+                                <button
+                                    onClick={() => setSelectedProduct(null)}
+                                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition"
+                                >
+                                    Batal
                                 </button>
                             </div>
                         </div>
+                    )}
+
+                    {/* Keranjang */}
+                    <div className="bg-white p-6 rounded-2xl shadow-md">
+                        <h2 className="text-xl font-semibold mb-4 text-gray-800">Keranjang</h2>
+                        {cart.length === 0 ? (
+                            <p className="text-center text-gray-500">Keranjang kosong.</p>
+                        ) : (
+                            <div className="space-y-4">
+                                {cart.map(item => (
+                                    <div key={item.product_id} className="flex justify-between items-center border-b pb-3">
+                                        <div>
+                                            <p className="font-medium text-gray-700">{item.name}</p>
+                                            <p className="text-sm text-gray-500">{item.code}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max={item.stock}
+                                                className="w-16 border rounded-lg text-center px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                                                value={item.quantity}
+                                                onChange={(e) => updateQuantity(item.product_id, e.target.value)}
+                                            />
+                                            <p className="w-24 text-right font-semibold text-gray-800">
+                                                Rp {item.subtotal.toLocaleString('id-ID')}
+                                            </p>
+                                            <button
+                                                onClick={() => removeFromCart(item.product_id)}
+                                                className="text-red-500 hover:text-red-700"
+                                            >
+                                                <FaTrashAlt />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Bagian Pembayaran */}
+                <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-2xl shadow-md space-y-5">
+                        <h2 className="text-2xl font-semibold text-gray-800 mb-2">Pembayaran</h2>
+
+                        <div>
+                            <label className="block text-sm text-gray-700 mb-1">Total Belanja</label>
+                            <div className="text-3xl font-bold text-green-600">
+                                Rp {total.toLocaleString('id-ID')}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-gray-700 mb-1">Nama Pelanggan (Opsional)</label>
+                            <input
+                                type="text"
+                                className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={data.customer_name}
+                                onChange={(e) => setData('customer_name', e.target.value)}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-gray-700 mb-1">Metode Pembayaran</label>
+                            <select
+                                className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={data.payment_method}
+                                onChange={(e) => setData('payment_method', e.target.value)}
+                            >
+                                <option value="cash">Tunai</option>
+                                <option value="debit">Kartu Debit</option>
+                                <option value="credit">Kartu Kredit</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-gray-700 mb-1">Jumlah Bayar</label>
+                            <input
+                                type="number"
+                                className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={data.payment_amount}
+                                onChange={(e) => setData('payment_amount', parseInt(e.target.value || 0))}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-gray-700 mb-1">Kembalian</label>
+                            <div className="text-2xl font-semibold text-blue-600">
+                                Rp {changeAmount > 0 ? changeAmount.toLocaleString('id-ID') : 0}
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={submitSale}
+                            disabled={processing || cart.length === 0}
+                            className={`w-full py-3 text-white font-semibold rounded-xl transition duration-200 ${
+                                processing || cart.length === 0
+                                    ? 'bg-blue-400 cursor-not-allowed'
+                                    : 'bg-blue-600 hover:bg-blue-700'
+                            }`}
+                        >
+                            {processing ? 'Menyimpan...' : 'Simpan Transaksi'}
+                        </button>
                     </div>
                 </div>
             </div>
-        </Authenticated>
-    );
+        </div>
+    </Authenticated>
+);
+
 }

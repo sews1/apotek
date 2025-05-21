@@ -1,0 +1,71 @@
+import React, { useState } from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import Authenticated from '@/Layouts/Authenticated';
+
+export default function Create({ auth }) {
+    const { data, setData, post, processing, errors } = useForm({
+        name: '',
+        phone: '',
+        address: '',
+    });
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        post(route('suppliers.store'));
+    };
+
+    return (
+        <Authenticated auth={auth} header="Tambah Supplier">
+            <Head title="Tambah Supplier" />
+
+            <div className="max-w-3xl mx-auto py-6 px-4 sm:px-6 lg:px-8 bg-white shadow rounded-lg border border-gray-100">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Nama Supplier</label>
+                        <input
+                            type="text"
+                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                            value={data.name}
+                            onChange={(e) => setData('name', e.target.value)}
+                        />
+                        {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name}</p>}
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">No. Telepon</label>
+                        <input
+                            type="text"
+                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                            value={data.phone}
+                            onChange={(e) => setData('phone', e.target.value)}
+                        />
+                        {errors.phone && <p className="text-red-600 text-sm mt-1">{errors.phone}</p>}
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Alamat</label>
+                        <textarea
+                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                            value={data.address}
+                            onChange={(e) => setData('address', e.target.value)}
+                        />
+                        {errors.address && <p className="text-red-600 text-sm mt-1">{errors.address}</p>}
+                    </div>
+
+                    <div className="flex justify-between">
+                        <Link href={route('suppliers.index')} className="text-blue-600 hover:underline">
+                            ← Kembali
+                        </Link>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                            disabled={processing}
+                        >
+                            Simpan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </Authenticated>
+    );
+}
