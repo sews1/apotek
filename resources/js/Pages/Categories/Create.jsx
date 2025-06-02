@@ -6,7 +6,6 @@ export default function Create({ auth }) {
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         kode_prefix: '',
-        slug: '',
         description: '',
         is_active: true,
     });
@@ -20,93 +19,142 @@ export default function Create({ auth }) {
         <Authenticated auth={auth} header="Tambah Kategori Baru">
             <Head title="Tambah Kategori Baru" />
 
-            <div className="py-6 px-4 sm:px-6 lg:px-8">
-                <div className="bg-white shadow rounded-lg p-6">
-                    <form onSubmit={handleSubmit}>
-                        <div className="space-y-6">
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="bg-white shadow-xl rounded-lg overflow-hidden">
+                    {/* Form Header */}
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+                        <h2 className="text-xl font-semibold text-white">Tambah Kategori Baru</h2>
+                        <p className="mt-1 text-sm text-blue-100">
+                            Isi formulir berikut untuk menambahkan kategori produk baru
+                        </p>
+                    </div>
 
+                    <form onSubmit={handleSubmit} className="divide-y divide-gray-200">
+                        <div className="px-6 py-5 space-y-6">
                             {/* Nama Kategori */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Kategori*</label>
-                                <input
-                                    type="text"
-                                    className={`w-full px-3 py-2 border rounded-md ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    placeholder="Contoh: Obat Bebas"
-                                />
-                                {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
-                            </div>
+                            <div className="grid grid-cols-1 gap-y-4 gap-x-6 sm:grid-cols-6">
+                                <div className="sm:col-span-6">
+                                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                                        Nama Kategori <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="mt-1 relative rounded-md shadow-sm">
+                                        <input
+                                            type="text"
+                                            id="name"
+                                            className={`block w-full rounded-md ${errors.name ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : 'border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
+                                            value={data.name}
+                                            onChange={(e) => setData('name', e.target.value)}
+                                            placeholder="Contoh: Obat Bebas"
+                                        />
+                                        {errors.name && (
+                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {errors.name && (
+                                        <p className="mt-2 text-sm text-red-600">{errors.name}</p>
+                                    )}
+                                </div>
 
-                            {/* Kode Produk */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Kode Produk*</label>
-                                <input
-                                    type="text"
-                                    className={`w-full px-3 py-2 border rounded-md uppercase ${errors.kode_prefix ? 'border-red-500' : 'border-gray-300'}`}
-                                    value={data.kode_prefix}
-                                    onChange={(e) => setData('kode_prefix', e.target.value.toUpperCase())}
-                                    placeholder="Contoh: OBB"
-                                />
-                                {errors.kode_prefix && <p className="mt-1 text-sm text-red-600">{errors.kode_prefix}</p>}
-                            </div>
+                                {/* Kode Produk */}
+                                <div className="sm:col-span-6">
+                                    <label htmlFor="kode_prefix" className="block text-sm font-medium text-gray-700">
+                                        Kode Produk <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="mt-1 relative rounded-md shadow-sm">
+                                        <input
+                                            type="text"
+                                            id="kode_prefix"
+                                            className={`block w-full rounded-md uppercase ${errors.kode_prefix ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : 'border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
+                                            value={data.kode_prefix}
+                                            onChange={(e) => setData('kode_prefix', e.target.value.toUpperCase())}
+                                            placeholder="Contoh: OBB"
+                                        />
+                                        {errors.kode_prefix && (
+                                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {errors.kode_prefix && (
+                                        <p className="mt-2 text-sm text-red-600">{errors.kode_prefix}</p>
+                                    )}
+                                    <p className="mt-1 text-sm text-gray-500">Kode unik untuk identifikasi kategori (maksimal 10 karakter)</p>
+                                </div>
 
-                            {/* Slug */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Slug*</label>
-                                <input
-                                    type="text"
-                                    className={`w-full px-3 py-2 border rounded-md lowercase ${errors.slug ? 'border-red-500' : 'border-gray-300'}`}
-                                    value={data.slug}
-                                    onChange={(e) => setData('slug', e.target.value.toLowerCase())}
-                                    placeholder="Contoh: obat-bebas"
-                                />
-                                {errors.slug && <p className="mt-1 text-sm text-red-600">{errors.slug}</p>}
-                            </div>
+                                {/* Deskripsi */}
+                                <div className="sm:col-span-6">
+                                    <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                                        Deskripsi
+                                    </label>
+                                    <div className="mt-1">
+                                        <textarea
+                                            id="description"
+                                            rows={3}
+                                            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border border-gray-300 rounded-md"
+                                            value={data.description}
+                                            onChange={(e) => setData('description', e.target.value)}
+                                            placeholder="Deskripsi kategori (opsional)"
+                                        />
+                                    </div>
+                                    <p className="mt-1 text-sm text-gray-500">Penjelasan singkat tentang kategori ini</p>
+                                </div>
 
-                            {/* Deskripsi */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
-                                <textarea
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                    rows="3"
-                                    value={data.description}
-                                    onChange={(e) => setData('description', e.target.value)}
-                                    placeholder="Deskripsi kategori (opsional)"
-                                />
-                            </div>
-
-                            {/* Checkbox Aktif */}
-                            <div className="flex items-center">
-                                <input
-                                    id="is_active"
-                                    type="checkbox"
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    checked={data.is_active}
-                                    onChange={(e) => setData('is_active', e.target.checked)}
-                                />
-                                <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700">
-                                    Kategori Aktif
-                                </label>
+                                {/* Status Aktif */}
+                                <div className="sm:col-span-6">
+                                    <div className="flex items-start">
+                                        <div className="flex items-center h-5">
+                                            <input
+                                                id="is_active"
+                                                name="is_active"
+                                                type="checkbox"
+                                                className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                                                checked={data.is_active}
+                                                onChange={(e) => setData('is_active', e.target.checked)}
+                                            />
+                                        </div>
+                                        <div className="ml-3 text-sm">
+                                            <label htmlFor="is_active" className="font-medium text-gray-700">
+                                                Kategori Aktif
+                                            </label>
+                                            <p className="text-gray-500">Produk dalam kategori ini akan tampil di aplikasi</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Tombol */}
-                        <div className="mt-6 flex justify-end space-x-3">
+                        {/* Form Footer */}
+                        <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
                             <Link
                                 href={route('categories.index')}
-                                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                             >
                                 Batal
                             </Link>
                             <button
                                 type="submit"
                                 disabled={processing}
-                                className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 ${
-                                    processing ? 'opacity-50 cursor-not-allowed' : ''
+                                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                                    processing ? 'opacity-70 cursor-not-allowed' : ''
                                 }`}
                             >
-                                {processing ? 'Menyimpan...' : 'Simpan Kategori'}
+                                {processing ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Menyimpan...
+                                    </>
+                                ) : (
+                                    'Simpan Kategori'
+                                )}
                             </button>
                         </div>
                     </form>

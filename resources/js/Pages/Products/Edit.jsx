@@ -13,8 +13,29 @@ export default function Edit({ auth, product, categories }) {
         stock: product.stock,
         min_stock: product.min_stock,
         unit: product.unit,
+        entry_date: product.entry_date,
+        expired_date: product.expired_date,
         image: null,
+        is_active: product.is_active,
     });
+
+    useEffect(() => {
+        if (data.category_id) {
+            fetch(`/api/products/last-code?category_id=${data.category_id}`)
+                .then(res => {
+                    if (!res.ok) throw new Error('Failed to fetch code');
+                    return res.json();
+                })
+                .then(result => {
+                    if (result.code) {
+                        setData('code', result.code);
+                    }
+                })
+                .catch(() => {
+                    setData('code', '');
+                });
+        }
+    }, [data.category_id]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -23,169 +44,302 @@ export default function Edit({ auth, product, categories }) {
         });
     };
 
-    const handleImageChange = (e) => {
-        setData('image', e.target.files[0]);
-    };
-
     return (
-        <Authenticated auth={auth} header="Edit Produk">
+        <Authenticated auth={auth}>
             <Head title="Edit Produk" />
+            <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">Edit Produk</h1>
+                        <p className="mt-1 text-sm text-gray-600">
+                            Perbarui informasi produk di bawah ini
+                        </p>
+                    </div>
+                    <Link
+                        href={route('products.index')}
+                        className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                        Kembali ke Daftar Produk
+                    </Link>
+                </div>
 
-            <div className="py-6 px-4 sm:px-6 lg:px-8">
-                <div className="bg-white shadow rounded-lg p-6">
-                    <form onSubmit={handleSubmit}>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Kolom Kiri */}
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Kode Produk*</label>
-                                    <input
-                                        type="text"
-                                        className={`w-full px-3 py-2 border rounded-md ${errors.code ? 'border-red-500' : 'border-gray-300'}`}
-                                        value={data.code}
-                                        onChange={(e) => setData('code', e.target.value)}
-                                        placeholder="PRD-001"
-                                        disabled
-                                    />
-                                    {errors.code && <p className="mt-1 text-sm text-red-600">{errors.code}</p>}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk*</label>
-                                    <input
-                                        type="text"
-                                        className={`w-full px-3 py-2 border rounded-md ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
-                                        value={data.name}
-                                        onChange={(e) => setData('name', e.target.value)}
-                                        placeholder="Paracetamol 500mg"
-                                    />
-                                    {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Kategori*</label>
-                                    <select
-                                        className={`w-full px-3 py-2 border rounded-md ${errors.category_id ? 'border-red-500' : 'border-gray-300'}`}
-                                        value={data.category_id}
-                                        onChange={(e) => setData('category_id', e.target.value)}
-                                    >
-                                        <option value="">Pilih Kategori</option>
-                                        {categories.map((category) => (
-                                            <option key={category.id} value={category.id}>
-                                                {category.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {errors.category_id && <p className="mt-1 text-sm text-red-600">{errors.category_id}</p>}
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
-                                    <textarea
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                        rows="3"
-                                        value={data.description}
-                                        onChange={(e) => setData('description', e.target.value)}
-                                        placeholder="Deskripsi produk..."
-                                    />
-                                </div>
+                <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+                    <form onSubmit={handleSubmit} className="divide-y divide-gray-200">
+                        {/* Category and Product Code */}
+                        <div className="px-4 py-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label htmlFor="category_id" className="block text-sm font-medium text-gray-700">
+                                    Kategori Produk <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    id="category_id"
+                                    value={data.category_id}
+                                    onChange={e => setData('category_id', e.target.value)}
+                                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                                    required
+                                >
+                                    <option value="">Pilih Kategori</option>
+                                    {categories.map(category => (
+                                        <option key={category.id} value={category.id}>{category.name}</option>
+                                    ))}
+                                </select>
+                                {errors.category_id && <p className="mt-2 text-sm text-red-600">{errors.category_id}</p>}
                             </div>
 
-                            {/* Kolom Kanan */}
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Harga Beli*</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            className={`w-full px-3 py-2 border rounded-md ${errors.purchase_price ? 'border-red-500' : 'border-gray-300'}`}
-                                            value={data.purchase_price}
-                                            onChange={(e) => setData('purchase_price', parseFloat(e.target.value) || 0)}
-                                        />
-                                        {errors.purchase_price && <p className="mt-1 text-sm text-red-600">{errors.purchase_price}</p>}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Harga Jual*</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            className={`w-full px-3 py-2 border rounded-md ${errors.selling_price ? 'border-red-500' : 'border-gray-300'}`}
-                                            value={data.selling_price}
-                                            onChange={(e) => setData('selling_price', parseFloat(e.target.value) || 0)}
-                                        />
-                                        {errors.selling_price && <p className="mt-1 text-sm text-red-600">{errors.selling_price}</p>}
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Stok*</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            className={`w-full px-3 py-2 border rounded-md ${errors.stock ? 'border-red-500' : 'border-gray-300'}`}
-                                            value={data.stock}
-                                            onChange={(e) => setData('stock', parseInt(e.target.value) || 0)}
-                                        />
-                                        {errors.stock && <p className="mt-1 text-sm text-red-600">{errors.stock}</p>}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Stok Minimum*</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            className={`w-full px-3 py-2 border rounded-md ${errors.min_stock ? 'border-red-500' : 'border-gray-300'}`}
-                                            value={data.min_stock}
-                                            onChange={(e) => setData('min_stock', parseInt(e.target.value) || 5)}
-                                        />
-                                        {errors.min_stock && <p className="mt-1 text-sm text-red-600">{errors.min_stock}</p>}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Satuan*</label>
+                            <div>
+                                <label htmlFor="code" className="block text-sm font-medium text-gray-700">
+                                    Kode Produk <span className="text-red-500">*</span>
+                                </label>
+                                <div className="mt-1 relative rounded-md shadow-sm">
                                     <input
                                         type="text"
-                                        className={`w-full px-3 py-2 border rounded-md ${errors.unit ? 'border-red-500' : 'border-gray-300'}`}
-                                        value={data.unit}
-                                        onChange={(e) => setData('unit', e.target.value)}
-                                        placeholder="tablet, botol, kapsul"
+                                        id="code"
+                                        value={data.code}
+                                        onChange={e => setData('code', e.target.value)}
+                                        className="block w-full pr-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                        required
                                     />
-                                    {errors.unit && <p className="mt-1 text-sm text-red-600">{errors.unit}</p>}
                                 </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Gambar Produk</label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                        onChange={handleImageChange}
-                                    />
-                                    <p className="mt-1 text-xs text-gray-500">Format: JPG, PNG (Maks. 2MB)</p>
-                                    {errors.image && <p className="mt-1 text-sm text-red-600">{errors.image}</p>}
-                                </div>
+                                {errors.code && <p className="mt-2 text-sm text-red-600">{errors.code}</p>}
                             </div>
                         </div>
 
-                        <div className="mt-6 flex justify-end space-x-3">
-                            <Link
-                                href={route('products.index')}
-                                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-                            >
-                                Batal
-                            </Link>
+                        {/* Product Name and Description */}
+                        <div className="px-4 py-5 sm:p-6">
+                            <div className="mb-6">
+                                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                                    Nama Produk <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    id="name"
+                                    value={data.name}
+                                    onChange={e => setData('name', e.target.value)}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {errors.name && <p className="mt-2 text-sm text-red-600">{errors.name}</p>}
+                            </div>
+
+                            <div>
+                                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                                    Deskripsi Produk
+                                </label>
+                                <textarea
+                                    id="description"
+                                    rows={3}
+                                    value={data.description}
+                                    onChange={e => setData('description', e.target.value)}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                />
+                                {errors.description && <p className="mt-2 text-sm text-red-600">{errors.description}</p>}
+                            </div>
+                        </div>
+
+                        {/* Pricing and Stock */}
+                        <div className="px-4 py-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label htmlFor="purchase_price" className="block text-sm font-medium text-gray-700">
+                                    Harga Beli <span className="text-red-500">*</span>
+                                </label>
+                                <div className="mt-1 relative rounded-md shadow-sm">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <span className="text-gray-500 sm:text-sm">Rp</span>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        id="purchase_price"
+                                        value={data.purchase_price}
+                                        onChange={e => setData('purchase_price', e.target.value)}
+                                        className="block w-full pl-10 pr-12 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                        required
+                                    />
+                                </div>
+                                {errors.purchase_price && <p className="mt-2 text-sm text-red-600">{errors.purchase_price}</p>}
+                            </div>
+
+                            <div>
+                                <label htmlFor="selling_price" className="block text-sm font-medium text-gray-700">
+                                    Harga Jual <span className="text-red-500">*</span>
+                                </label>
+                                <div className="mt-1 relative rounded-md shadow-sm">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <span className="text-gray-500 sm:text-sm">Rp</span>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        id="selling_price"
+                                        value={data.selling_price}
+                                        onChange={e => setData('selling_price', e.target.value)}
+                                        className="block w-full pl-10 pr-12 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                        required
+                                    />
+                                </div>
+                                {errors.selling_price && <p className="mt-2 text-sm text-red-600">{errors.selling_price}</p>}
+                            </div>
+
+                            <div>
+                                <label htmlFor="stock" className="block text-sm font-medium text-gray-700">
+                                    Stok Saat Ini <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    id="stock"
+                                    value={data.stock}
+                                    onChange={e => setData('stock', e.target.value)}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {errors.stock && <p className="mt-2 text-sm text-red-600">{errors.stock}</p>}
+                            </div>
+
+                            <div>
+                                <label htmlFor="min_stock" className="block text-sm font-medium text-gray-700">
+                                    Stok Minimum <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    id="min_stock"
+                                    value={data.min_stock}
+                                    onChange={e => setData('min_stock', e.target.value)}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {errors.min_stock && <p className="mt-2 text-sm text-red-600">{errors.min_stock}</p>}
+                            </div>
+                        </div>
+
+                        {/* Dates and Unit */}
+                        <div className="px-4 py-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label htmlFor="entry_date" className="block text-sm font-medium text-gray-700">
+                                    Tanggal Masuk <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="date"
+                                    id="entry_date"
+                                    value={data.entry_date}
+                                    onChange={e => setData('entry_date', e.target.value)}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {errors.entry_date && <p className="mt-2 text-sm text-red-600">{errors.entry_date}</p>}
+                            </div>
+
+                            <div>
+                                <label htmlFor="expired_date" className="block text-sm font-medium text-gray-700">
+                                    Tanggal Kadaluwarsa
+                                </label>
+                                <input
+                                    type="date"
+                                    id="expired_date"
+                                    value={data.expired_date}
+                                    onChange={e => setData('expired_date', e.target.value)}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                />
+                                {errors.expired_date && <p className="mt-2 text-sm text-red-600">{errors.expired_date}</p>}
+                            </div>
+
+                            <div>
+                                <label htmlFor="unit" className="block text-sm font-medium text-gray-700">
+                                    Satuan <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    id="unit"
+                                    value={data.unit}
+                                    onChange={e => setData('unit', e.target.value)}
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {errors.unit && <p className="mt-2 text-sm text-red-600">{errors.unit}</p>}
+                            </div>
+
+                            <div className="flex items-center">
+                                <input
+                                    id="is_active"
+                                    name="is_active"
+                                    type="checkbox"
+                                    checked={data.is_active}
+                                    onChange={e => setData('is_active', e.target.checked)}
+                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                />
+                                <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700">
+                                    Produk Aktif/Tersedia
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Image Upload */}
+                        <div className="px-4 py-5 sm:p-6">
+                            <label className="block text-sm font-medium text-gray-700">Gambar Produk</label>
+                            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                                <div className="space-y-1 text-center">
+                                    {product.image_path ? (
+                                        <>
+                                            <img 
+                                                src={`/storage/${product.image_path}`} 
+                                                alt="Current product" 
+                                                className="mx-auto h-32 w-32 object-contain"
+                                            />
+                                            <p className="text-sm text-gray-600">Gambar saat ini</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg
+                                                className="mx-auto h-12 w-12 text-gray-400"
+                                                stroke="currentColor"
+                                                fill="none"
+                                                viewBox="0 0 48 48"
+                                                aria-hidden="true"
+                                            >
+                                                <path
+                                                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                                                    strokeWidth={2}
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
+                                            <div className="flex text-sm text-gray-600">
+                                                <label
+                                                    htmlFor="file-upload"
+                                                    className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+                                                >
+                                                    <span>Upload gambar baru</span>
+                                                    <input
+                                                        id="file-upload"
+                                                        name="file-upload"
+                                                        type="file"
+                                                        className="sr-only"
+                                                        onChange={e => setData('image', e.target.files[0])}
+                                                    />
+                                                </label>
+                                                <p className="pl-1">atau drag and drop</p>
+                                            </div>
+                                            <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                            {errors.image && <p className="mt-2 text-sm text-red-600">{errors.image}</p>}
+                        </div>
+
+                        {/* Submit Button */}
+                        <div className="px-4 py-3 bg-gray-50 text-right sm:px-6">
                             <button
                                 type="submit"
                                 disabled={processing}
-                                className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 ${
-                                    processing ? 'opacity-50 cursor-not-allowed' : ''
-                                }`}
+                                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {processing ? 'Menyimpan...' : 'Simpan Perubahan'}
+                                {processing ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Menyimpan...
+                                    </>
+                                ) : 'Simpan Perubahan'}
                             </button>
                         </div>
                     </form>

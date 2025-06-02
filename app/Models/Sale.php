@@ -54,6 +54,7 @@ class Sale extends Model
         }
     }
 
+
     /**
      * Apply filters to the sales query.
      *
@@ -80,4 +81,7 @@ class Sale extends Model
 
         return $query;
     }
+    
+
+    
 }

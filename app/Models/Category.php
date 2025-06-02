@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 
 class Category extends Model
 {
@@ -13,7 +12,6 @@ class Category extends Model
 
     protected $fillable = [
         'name',
-        'slug',
         'kode_prefix',
         'description',
         'is_active',
@@ -23,31 +21,25 @@ class Category extends Model
         'is_active' => 'boolean',
     ];
 
-    // Generate slug saat create/update
-    protected static function booted()
-    {
-        static::creating(function ($category) {
-            $category->slug = Str::slug($category->name);
-        });
-
-        static::updating(function ($category) {
-            $category->slug = Str::slug($category->name);
-        });
-    }
-
-    // Relasi ke produk
+    /**
+     * Relasi: satu kategori memiliki banyak produk
+     */
     public function products()
     {
         return $this->hasMany(Product::class);
     }
 
-    // Scope untuk kategori aktif
+    /**
+     * Scope untuk hanya mengambil kategori yang aktif
+     */
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
     }
 
-    // Scope untuk filter pencarian dan trashed
+    /**
+     * Scope untuk filter berdasarkan pencarian nama dan soft delete
+     */
     public function scopeFilter($query, array $filters)
     {
         if (!empty($filters['search'])) {

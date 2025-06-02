@@ -18,7 +18,7 @@ use Inertia\Inertia;
 |--------------------------------------------------------------------------
 */
 
-// Halaman Publik
+// Public Pages
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
@@ -26,7 +26,7 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
-// Autentikasi
+// Authentication
 Route::middleware('guest')->group(function () {
     // Login Routes
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
@@ -42,66 +42,74 @@ Route::post('/logout', [LoginController::class, 'logout'])
     ->middleware('auth')
     ->name('logout');
 
-// Dashboard (dipindah ke luar grup dan ditambahkan middleware langsung)
+// Dashboard - Accessible by all roles
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
-// Area Terproteksi
+// Protected Area
 Route::middleware(['auth', 'verified'])->group(function () {
-    // Profile Management
+    // Profile Management - Accessible by all roles
     Route::prefix('profile')->name('profile.')->group(function () {
         Route::get('/', [ProfileController::class, 'edit'])->name('edit');
         Route::patch('/', [ProfileController::class, 'update'])->name('update');
         Route::delete('/', [ProfileController::class, 'destroy'])->name('destroy');
     });
 
-    // Product Management
+    // Product Management - Viewable by all, but modifications only by warehouse
     Route::prefix('products')->name('products.')->group(function () {
         Route::get('/', [ProductController::class, 'index'])->name('index');
-        Route::get('/create', [ProductController::class, 'create'])->name('create');
-        Route::post('/', [ProductController::class, 'store'])->name('store');
-        Route::get('/{product}', [ProductController::class, 'show'])->name('show');
-        Route::get('/{product}/edit', [ProductController::class, 'edit'])->name('edit');
-        Route::put('/{product}', [ProductController::class, 'update'])->name('products.update'); // Corrected here
-        Route::delete('/{product}', [ProductController::class, 'destroy'])->name('destroy');
         Route::get('/expired', [ProductController::class, 'expiredProducts'])->name('expired');
-
+        
+        // Warehouse-only routes
+        Route::middleware('role:warehouse')->group(function () {
+            Route::get('/create', [ProductController::class, 'create'])->name('create');
+            Route::post('/', [ProductController::class, 'store'])->name('store');
+            Route::get('/{product}/edit', [ProductController::class, 'edit'])->name('edit');
+            Route::put('/{product}', [ProductController::class, 'update'])->name('update');
+            Route::delete('/{product}', [ProductController::class, 'destroy'])->name('destroy');
+            Route::put('/{product}/toggle-status', [ProductController::class, 'toggleStatus'])
+                ->name('toggle-status');
+        });
     });
 
-    // API for product search
+    // API for product search - Accessible by all roles
     Route::get('/api/products/search', [ProductController::class, 'search'])->name('api.products.search');
     Route::get('/api/products/last-code', [ProductController::class, 'getLastCode']);
 
-    // Sales Management
-    Route::prefix('sales')->name('sales.')->group(function () {
+    // Sales Management - Only for admin and owner
+    Route::middleware('role:admin,owner')->prefix('sales')->name('sales.')->group(function () {
         Route::get('/', [SaleController::class, 'index'])->name('index');
         Route::get('/create', [SaleController::class, 'create'])->name('create');
         Route::post('/', [SaleController::class, 'store'])->name('store');
         Route::get('/{sale}', [SaleController::class, 'show'])->name('show');
         Route::get('/{sale}/invoice', [SaleController::class, 'invoice'])->name('invoice');
         Route::get('/sales/{sale}/invoice-pdf', [SaleController::class, 'downloadInvoice'])->name('sales.invoice.pdf');
-
     });
 
-    // Additional Inventory Routes
+    // Inventory Routes - Viewable by all
     Route::prefix('inventory')->name('inventory.')->group(function () {
         Route::get('/low-stock', [ProductController::class, 'lowStock'])->name('low-stock');
         Route::get('/expired', [ProductController::class, 'expiredProducts'])->name('expired');
     });
 
-    // Categories Routes
+    // Categories Routes - Viewable by all, but modifications only by warehouse
     Route::prefix('categories')->name('categories.')->group(function () {
         Route::get('/', [CategoryController::class, 'index'])->name('index');
-        Route::get('/create', [CategoryController::class, 'create'])->name('create');
-        Route::post('/', [CategoryController::class, 'store'])->name('store');
-        Route::get('/{category}/edit', [CategoryController::class, 'edit'])->name('edit');
-        Route::patch('/{category}', [CategoryController::class, 'update'])->name('update');
-        Route::delete('/{category}', [CategoryController::class, 'destroy'])->name('destroy');
-        Route::patch('/{category}/restore', [CategoryController::class, 'restore'])->name('restore');
+        
+        // Warehouse-only routes
+        Route::middleware('role:warehouse')->group(function () {
+            Route::get('/create', [CategoryController::class, 'create'])->name('create');
+            Route::post('/', [CategoryController::class, 'store'])->name('store');
+            Route::get('/{category}/edit', [CategoryController::class, 'edit'])->name('edit');
+            Route::patch('/{category}', [CategoryController::class, 'update'])->name('update');
+            Route::delete('/{category}', [CategoryController::class, 'destroy'])->name('destroy');
+            Route::patch('/{category}/restore', [CategoryController::class, 'restore'])->name('restore');
+        });
     });
 
-     Route::prefix('suppliers')->name('suppliers.')->group(function () {
+    // Suppliers Routes - Only for owner and warehouse
+    Route::middleware('role:owner,warehouse')->prefix('suppliers')->name('suppliers.')->group(function () {
         Route::get('/', [SupplierController::class, 'index'])->name('index');
         Route::get('/create', [SupplierController::class, 'create'])->name('create');
         Route::post('/', [SupplierController::class, 'store'])->name('store');
@@ -110,15 +118,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{supplier}', [SupplierController::class, 'destroy'])->name('destroy');
     });
 
-   Route::prefix('reports')->group(function () {
-    Route::get('/', [ReportController::class, 'index'])->name('reports.index');
-    Route::get('/weekly', [ReportController::class, 'weekly'])->name('weekly');
-    Route::get('/monthly', [ReportController::class, 'monthly'])->name('monthly');
-    Route::get('/yearly', [ReportController::class, 'yearly'])->name('yearly');
+    // Reports Routes - Only for owner
+    Route::middleware('role:owner')->prefix('reports')->group(function () {
+        Route::get('/', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('/weekly', [ReportController::class, 'weekly'])->name('weekly');
+        Route::get('/monthly', [ReportController::class, 'monthly'])->name('monthly');
+        Route::get('/yearly', [ReportController::class, 'yearly'])->name('yearly');
+        Route::get('/product', [ReportController::class, 'product'])->name('product');
+        Route::get('/supplier', [ReportController::class, 'supplier'])->name('supplier');
     });
 });
-
-// // API untuk Inertia
-// Route::middleware('auth')->prefix('api')->group(function () {
-//     Route::get('/products/search', [ProductController::class, 'search'])->name('api.products.search');
-// });

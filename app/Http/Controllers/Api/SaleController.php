@@ -29,6 +29,7 @@ class SaleController extends Controller
     {
         $products = Product::select('id', 'name', 'code', 'selling_price', 'stock')
             ->where('stock', '>', 0)
+            ->where('is_active', true)  // Tambahkan kondisi ini
             ->get()
             ->map(fn($product) => [
                 ...$product->toArray(),

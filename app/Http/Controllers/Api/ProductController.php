@@ -5,40 +5,47 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\SaleItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class ProductController extends Controller
 {
+    // Validation rules that can be reused
+    protected $productValidationRules = [
+        'code' => 'required|max:20|unique:products',
+        'name' => 'required|max:100',
+        'category_id' => 'required|exists:categories,id',
+        'description' => 'nullable|string',
+        'purchase_price' => 'required|numeric|min:0',
+        'selling_price' => 'required|numeric|min:0',
+        'stock' => 'required|integer|min:0',
+        'min_stock' => 'required|integer|min:1',
+        'unit' => 'required|string|max:20',
+        'entry_date' => 'nullable|date',
+        'expired_date' => 'nullable|date|after_or_equal:entry_date',
+        'image' => 'nullable|image|max:2048',
+    ];
+
     public function index()
     {
-        $stockStatus = request('stock_status');
-        $query = Product::with('category');
-
-        if ($search = request('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%$search%")
-                  ->orWhere('code', 'like', "%$search%");
+        $query = Product::with('category')
+            ->when(request('search'), function ($q, $search) {
+                $q->where(function ($query) use ($search) {
+                    $query->where('name', 'like', "%$search%")
+                          ->orWhere('code', 'like', "%$search%");
+                });
+            })
+            ->when(request('category'), function ($q, $category) {
+                $q->where('category_id', $category);
+            })
+            ->when(request('stock_status'), function ($q, $status) {
+                $this->applyStockStatusFilter($q, $status);
             });
-        }
-
-        if ($category = request('category')) {
-            $query->where('category_id', $category);
-        }
-
-        if ($stockStatus) {
-            $query->where(function ($q) use ($stockStatus) {
-                if ($stockStatus === 'in_stock') {
-                    $q->whereColumn('stock', '>', 'min_stock');
-                } elseif ($stockStatus === 'low_stock') {
-                    $q->whereColumn('stock', '<=', 'min_stock')->where('stock', '>', 0);
-                } elseif ($stockStatus === 'out_of_stock') {
-                    $q->where('stock', '<=', 0);
-                }
-            });
-        }
 
         $products = $query->latest()->paginate(10)->withQueryString();
 
@@ -49,22 +56,34 @@ class ProductController extends Controller
         ]);
     }
 
+    protected function applyStockStatusFilter($query, $status)
+    {
+        switch ($status) {
+            case 'in_stock':
+                return $query->whereColumn('stock', '>', 'min_stock');
+            case 'low_stock':
+                return $query->whereColumn('stock', '<=', 'min_stock')->where('stock', '>', 0);
+            case 'out_of_stock':
+                return $query->where('stock', '<=', 0);
+            default:
+                return $query;
+        }
+    }
+
     public function expiredProducts(Request $request)
     {
         $query = Product::with('category')
             ->whereNotNull('expired_date')
-            ->whereDate('expired_date', '<', Carbon::today());
-
-        if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%$search%")
-                  ->orWhere('code', 'like', "%$search%");
+            ->whereDate('expired_date', '<', Carbon::today())
+            ->when($request->search, function ($q, $search) {
+                $q->where(function ($query) use ($search) {
+                    $query->where('name', 'like', "%$search%")
+                          ->orWhere('code', 'like', "%$search%");
+                });
+            })
+            ->when($request->category, function ($q, $category) {
+                $q->where('category_id', $category);
             });
-        }
-
-        if ($category = $request->input('category')) {
-            $query->where('category_id', $category);
-        }
 
         $expiredProducts = $query->latest('expired_date')->paginate(10)->withQueryString();
 
@@ -84,28 +103,27 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'code' => 'required|unique:products|max:20',
-            'name' => 'required|max:100',
-            'category_id' => 'required|exists:categories,id',
-            'description' => 'nullable|string',
-            'purchase_price' => 'required|numeric|min:0',
-            'selling_price' => 'required|numeric|min:0',
-            'stock' => 'required|integer|min:0',
-            'min_stock' => 'required|integer|min:1',
-            'unit' => 'required|string|max:20',
-            'entry_date' => 'nullable|date',
-            'expired_date' => 'nullable|date|after_or_equal:entry_date',
-            'image' => 'nullable|image|max:2048',
-        ]);
+        $validator = Validator::make($request->all(), $this->productValidationRules);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        $validated = $validator->validated();
 
         if ($request->hasFile('image')) {
             $validated['image'] = $request->file('image')->store('products', 'public');
         }
 
+        $validated['sold_quantity'] = 0;
+        $validated['is_active'] = true;
+
         Product::create($validated);
 
-        return redirect()->route('products.index')->with('success', 'Produk berhasil ditambahkan!');
+        return redirect()->route('products.index')
+            ->with('success', 'Produk berhasil ditambahkan!');
     }
 
     public function show(Product $product)
@@ -125,20 +143,18 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
-        $validated = $request->validate([
-            'code' => 'required|max:20|unique:products,code,' . $product->id,
-            'name' => 'required|max:100',
-            'category_id' => 'required|exists:categories,id',
-            'description' => 'nullable|string',
-            'purchase_price' => 'required|numeric|min:0',
-            'selling_price' => 'required|numeric|min:0',
-            'stock' => 'required|integer|min:0',
-            'min_stock' => 'required|integer|min:1',
-            'unit' => 'required|string|max:20',
-            'entry_date' => 'nullable|date',
-            'expired_date' => 'nullable|date|after_or_equal:entry_date',
-            'image' => 'nullable|image|max:2048',
-        ]);
+        $rules = $this->productValidationRules;
+        $rules['code'] = 'required|max:20|unique:products,code,' . $product->id;
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
+        $validated = $validator->validated();
 
         if ($request->hasFile('image')) {
             if ($product->image) {
@@ -149,70 +165,225 @@ class ProductController extends Controller
 
         $product->update($validated);
 
-        return redirect()->route('products.index')->with('success', 'Produk berhasil diperbarui!');
+        return redirect()->route('products.index')
+            ->with('success', 'Produk berhasil diperbarui!');
     }
 
     public function destroy(Product $product)
     {
-        if ($product->image) {
-            Storage::disk('public')->delete($product->image);
+        try {
+            DB::beginTransaction();
+
+            if ($product->image) {
+                Storage::disk('public')->delete($product->image);
+            }
+
+            $product->delete();
+
+            DB::commit();
+
+            return redirect()->route('products.index')
+                ->with('success', 'Produk berhasil dihapus!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->with('error', 'Gagal menghapus produk: ' . $e->getMessage());
         }
-
-        $product->delete();
-
-        return redirect()->route('products.index')->with('success', 'Produk berhasil dihapus!');
     }
 
     public function search(Request $request)
     {
-        $term = $request->input('term', '');
+        $request->validate([
+            'term' => 'nullable|string|max:100'
+        ]);
+
         return Product::select('id', 'code', 'name', 'selling_price', 'stock')
-            ->where('name', 'like', '%' . $term . '%')
-            ->orWhere('code', 'like', '%' . $term . '%')
+            ->where('is_active', true)
+            ->where(function ($query) use ($request) {
+                $query->where('name', 'like', '%' . $request->term . '%')
+                      ->orWhere('code', 'like', '%' . $request->term . '%');
+            })
+            ->orderBy('name')
             ->limit(10)
             ->get();
     }
 
-    public function getLastCode(Request $request)
+    public function toggleStatus(Product $product)
     {
-        $categoryId = $request->get('category_id');
+        $product->update(['is_active' => !$product->is_active]);
 
-        if (!$categoryId) {
-            return response()->json(['error' => 'Category ID is required'], 400);
-        }
-
-        $category = Category::find($categoryId);
-
-        if (!$category) {
-            return response()->json(['error' => 'Category not found'], 404);
-        }
-
-        $prefix = $this->getPrefixByCategory($category->name);
-
-        $lastProduct = Product::where('code', 'like', "$prefix%")
-            ->orderByDesc('code')
-            ->first();
-
-        if ($lastProduct && preg_match('/(\d+)$/', $lastProduct->code, $matches)) {
-            $number = (int)$matches[1] + 1;
-        } else {
-            $number = 1;
-        }
-
-        $newCode = sprintf('%s%04d', $prefix, $number);
-
-        return response()->json(['code' => $newCode]);
+        return back()->with('success', 'Status produk berhasil diubah');
     }
 
-    private function getPrefixByCategory(string $categoryName): string
+    public function reports()
     {
-        return match ($categoryName) {
-            'Obat Bebas' => 'OBB',
-            'Obat Bebas Terbatas' => 'OBT',
-            'Obat Keras' => 'OBK',
-            'Alat Kesehatan' => 'ALK',
-            'Perawatan Tubuh' => 'PRT',
-            default => 'PRD',
-        };
+        try {
+            // Basic counts
+            $totalProducts = Product::count();
+            $totalStock = Product::sum('stock');
+            $totalValue = Product::sum(DB::raw('stock * purchase_price'));
+
+            // Stock status products
+            $lowStockProducts = $this->getLowStockProducts();
+            $outOfStockProducts = $this->getOutOfStockProducts();
+            $soonExpiredProducts = $this->getSoonExpiredProducts();
+
+            // Sales data
+            $bestSellingProducts = $this->getBestSellingProducts();
+
+            // Category summary
+            $productsByCategory = $this->getProductsByCategory($totalProducts);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'summary' => [
+                        'total_products' => $totalProducts,
+                        'total_stock' => $totalStock,
+                        'total_value' => $totalValue,
+                        'low_stock_count' => $lowStockProducts->count(),
+                        'out_of_stock_count' => $outOfStockProducts->count(),
+                        'soon_expired_count' => $soonExpiredProducts->count(),
+                    ],
+                    'low_stock_products' => $lowStockProducts,
+                    'out_of_stock_products' => $outOfStockProducts,
+                    'best_selling_products' => $bestSellingProducts,
+                    'products_by_category' => $productsByCategory,
+                    'soon_expired_products' => $soonExpiredProducts,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat memuat laporan produk.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
+
+    protected function getLowStockProducts()
+    {
+        return Product::with('category')
+            ->whereColumn('stock', '<=', 'min_stock')
+            ->where('stock', '>', 0)
+            ->get()
+            ->map(function ($product) {
+                return $this->formatProductReport($product);
+            });
+    }
+
+    protected function getOutOfStockProducts()
+    {
+        return Product::with('category')
+            ->where('stock', '<=', 0)
+            ->get()
+            ->map(function ($product) {
+                return $this->formatProductReport($product);
+            });
+    }
+
+    protected function getSoonExpiredProducts()
+    {
+        return Product::with('category')
+            ->whereNotNull('expired_date')
+            ->whereDate('expired_date', '>', Carbon::today())
+            ->whereDate('expired_date', '<=', Carbon::today()->addDays(30))
+            ->get()
+            ->map(function ($product) {
+                $data = $this->formatProductReport($product);
+                $data['expired_date'] = $product->expired_date;
+                $data['days_to_expire'] = Carbon::today()->diffInDays($product->expired_date);
+                return $data;
+            });
+    }
+
+    protected function getBestSellingProducts()
+    {
+        // Try to get from sale items first
+        $bestSellingFromSales = SaleItem::select('product_id', DB::raw('SUM(quantity) as total_sold'))
+            ->with(['product.category'])
+            ->groupBy('product_id')
+            ->orderByDesc('total_sold')
+            ->limit(10)
+            ->get()
+            ->map(function ($item) {
+                if ($item->product) {
+                    return $this->formatProductReport($item->product, $item->total_sold);
+                }
+                return null;
+            })
+            ->filter();
+
+        if ($bestSellingFromSales->isNotEmpty()) {
+            return $bestSellingFromSales;
+        }
+
+        // Fallback to sold_quantity field
+        return Product::with('category')
+            ->where('sold_quantity', '>', 0)
+            ->orderByDesc('sold_quantity')
+            ->limit(10)
+            ->get()
+            ->map(function ($product) {
+                return $this->formatProductReport($product, $product->sold_quantity);
+            });
+    }
+
+    protected function getProductsByCategory($totalProducts)
+    {
+        return Category::query()
+            ->withCount('products')
+            ->with(['products' => function ($q) {
+                $q->select('category_id')
+                  ->selectRaw('SUM(stock) as stock_sum')
+                  ->selectRaw('SUM(stock * purchase_price) as value_sum')
+                  ->groupBy('category_id');
+            }])
+            ->get()
+            ->map(function ($category) use ($totalProducts) {
+                $stockSum = $category->products->sum('stock_sum') ?? 0;
+                $valueSum = $category->products->sum('value_sum') ?? 0;
+
+                return [
+                    'category_id' => $category->id,
+                    'category_name' => $category->name,
+                    'product_count' => $category->products_count,
+                    'percentage' => $totalProducts > 0 
+                        ? round(($category->products_count / $totalProducts) * 100, 2) 
+                        : 0,
+                    'stock' => $stockSum,
+                    'total_value' => $valueSum,
+                ];
+            })
+            ->filter(fn($item) => $item['product_count'] > 0);
+    }
+
+    protected function formatProductReport($product, $soldQuantity = null)
+    {
+        return [
+            'id' => $product->id,
+            'code' => $product->code,
+            'name' => $product->name,
+            'category_name' => $product->category->name ?? '-',
+            'current_stock' => $product->stock,
+            'min_stock' => $product->min_stock,
+            'selling_price' => $product->selling_price,
+            'total_sold' => $soldQuantity ?? $product->sold_quantity,
+        ];
+    }
+
+    public function share(Request $request)
+    {
+        return array_merge(parent::share($request), [
+            'auth' => [
+                'user' => $request->user() ? [
+                    'id' => $request->user()->id,
+                    'name' => $request->user()->name,
+                    'roles' => $request->user()->roles->pluck('name'), // pastikan ada
+                ] : null,
+            ],
+        ]);
+    }
+
 }
