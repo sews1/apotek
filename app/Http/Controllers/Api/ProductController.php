@@ -37,7 +37,7 @@ class ProductController extends Controller
             ->when(request('search'), function ($q, $search) {
                 $q->where(function ($query) use ($search) {
                     $query->where('name', 'like', "%$search%")
-                          ->orWhere('code', 'like', "%$search%");
+                        ->orWhere('code', 'like', "%$search%");
                 });
             })
             ->when(request('category'), function ($q, $category) {
@@ -50,6 +50,9 @@ class ProductController extends Controller
         $products = $query->latest()->paginate(10)->withQueryString();
 
         return Inertia::render('Products/Index', [
+            'auth' => [
+                'user' => auth()->user()
+            ],
             'products' => $products,
             'categories' => Category::all(),
             'filters' => request()->only(['search', 'category', 'stock_status']),

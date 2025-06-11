@@ -28,11 +28,54 @@ export default function Index() {
     });
 
     // Cek permission berdasarkan role
-    const hasPermission = (permission) => {
-    return auth?.user?.roles?.includes?.(permission) ?? false;
+    // Replace the existing hasPermission function with this updated version
+const hasPermission = (requiredPermission) => {
+    const userRoles = auth?.user?.roles || [];
+    
+    // Check if user has the required permission directly
+    if (auth?.user?.permissions?.includes(requiredPermission)) {
+        return true;
+    }
+    
+    // Check if any of the user's roles has the required permission
+    const hasPermissionViaRole = userRoles.some(role => 
+        role.permissions?.includes(requiredPermission)
+    );
+    
+    if (hasPermissionViaRole) {
+        return true;
+    }
+    
+    // Special case for warehouse role
+    if (userRoles.some(role => role.name === 'warehouse')) {
+        // Define which permissions warehouse should have
+        const warehousePermissions = [
+            'edit',
+            'create-product',
+            'delete',
+            'toggle-status'
+        ];
+        
+        return warehousePermissions.includes(requiredPermission);
+    }
+    
+    return false;
+};
+
+// Fungsi untuk mengecek role
+    const hasRole = (roleName) => {
+        return auth?.user?.roles?.some(role => role.name === roleName);
     };
 
+    // Fungsi untuk mengecek permission atau role warehouse
+    const canAccess = (permission) => {
+        return hasPermission(permission) || hasRole('warehouse');
+    };
 
+    // const hasWarehouseRole = () => {
+    //     const userRoles = auth?.user?.roles?.map(role => role.name) || [];
+    //     return userRoles.includes('warehouse');
+    // };
     // Tampilkan alert jika tidak memiliki permission
     const showPermissionAlert = () => {
         Swal.fire({
@@ -125,17 +168,17 @@ export default function Index() {
     const uniqueCategories = [...new Set(products.data.map(product => product.category?.name).filter(Boolean))];
 
     const toggleStatus = async (product) => {
-        // Cek permission
-        if (!hasPermission('edit-product')) {
-            showPermissionAlert();
-            return;
-        }
+    // Cek permission
+    if (!hasPermission('toggle-product-status')) {
+        showPermissionAlert();
+        return;
+    }
 
         // Prevent manual activation of expired products
         if (!product.is_active && isProductExpired(product)) {
-            toast.error('Tidak dapat mengaktifkan produk yang sudah kadaluwarsa');
-            return;
-        }
+        toast.error('Tidak dapat mengaktifkan produk yang sudah kadaluwarsa');
+        return;
+    }
 
         const isActive = Number(product.is_active); // pastikan bentuk angka, bukan string
         const action = isActive === 1 ? 'menonaktifkan' : 'mengaktifkan';
@@ -184,51 +227,35 @@ export default function Index() {
         }
     };
 
-    const handleDelete = async (productId) => {
-        // Cek permission
-        if (!hasPermission('delete-product')) {
-            showPermissionAlert();
-            return;
-        }
+    const handleDelete = async (productId, productName) => {
+    const result = await Swal.fire({
+        title: 'Apakah Anda yakin?',
+        text: `Produk "${productName}" akan dihapus secara permanen.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, hapus',
+        cancelButtonText: 'Tidak',
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        reverseButtons: true
+    });
 
-        const product = localProducts.find(p => p.id === productId);
-        
-        const result = await Swal.fire({
-            title: 'Apakah Anda yakin?',
-            html: `Anda akan menghapus produk <strong>"${product.name}"</strong>.<br/><br/>Penghapusan produk akan mempengaruhi laporan penjualan.`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Ya, hapus!',
-            cancelButtonText: 'Batal',
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            reverseButtons: true
+    if (result.isConfirmed) {
+        Inertia.delete(route('products.destroy', productId), {
+            onSuccess: () => {
+                toast.success('Produk berhasil dihapus');
+                Swal.fire('Berhasil!', 'Produk telah dihapus.', 'success');
+            },
+            onError: () => {
+                toast.error('Gagal menghapus produk');
+                Swal.fire('Gagal!', 'Terjadi kesalahan saat menghapus produk.', 'error');
+            },
         });
+    } else {
+        Swal.fire('Dibatalkan', 'Produk tidak jadi dihapus.', 'info');
+    }
+};
 
-        if (result.isConfirmed) {
-            Inertia.delete(route('products.destroy', productId), {
-                preserveScroll: true,
-                onSuccess: () => {
-                    toast.success('Produk berhasil dihapus');
-                    setLocalProducts((prev) => prev.filter(p => p.id !== productId));
-                    
-                    Swal.fire(
-                        'Terhapus!',
-                        'Produk telah berhasil dihapus.',
-                        'success'
-                    );
-                },
-                onError: () => {
-                    toast.error('Gagal menghapus produk');
-                    Swal.fire(
-                        'Gagal!',
-                        'Terjadi kesalahan saat menghapus produk.',
-                        'error'
-                    );
-                }
-            });
-        }
-    };
 
     const handleFilterChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -332,9 +359,9 @@ export default function Index() {
     };
 
     return (
-        <Authenticated user={auth.user}>
-            <Head title="Produk" />
+         <Authenticated auth={auth} header="Data Produk">
 
+            <Head title="Produk" />
             <div className="container mx-auto px-4 py-6">
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
@@ -364,136 +391,133 @@ export default function Index() {
                         </div>
                     </div>
                     
-                    <div className="flex gap-3">
-                        {hasPermission('create-product') ? (
-                            <Link
-                                href={route('products.create')}
-                                className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg shadow hover:shadow-md transition-all"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                                </svg>
-                                Tambah Produk
-                            </Link>
-                        ) : (
-                            <button
-                                onClick={showPermissionAlert}
-                                className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg shadow hover:shadow-md transition-all opacity-75 cursor-not-allowed"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                                </svg>
-                                Tambah Produk
-                            </button>
-                        )}
-                    </div>
-                </div>
+                    {/* Button Tambah Produk */}
+                     <div className="flex gap-3">
+                                            {auth.user?.role === 'warehouse' && (
+                                                    <Link
+                                                        href={route('products.create')}
+                                                        className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg shadow hover:shadow-md transition-all"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                                                        </svg>
+                                                        Tambah Produk
+                                                    </Link>
+                                                )}
+                                                </div>
+                                     </div>
+                                                    {/* Filter Card */}
+                                                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+                                                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                                            {/* Search */}
+                                                            <div className="md:col-span-2 lg:col-span-1">
+                                                                <label className="block text-sm font-medium text-gray-700 mb-1">Cari Produk</label>
+                                                                <div className="relative">
+                                                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                                        </svg>
+                                                                    </div>
+                                                                    <input
+                                                                        type="text"
+                                                                        name="search"
+                                                                        value={filters.search}
+                                                                        onChange={handleFilterChange}
+                                                                        placeholder="Nama produk atau kode..."
+                                                                        className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                    />
+                                                                </div>
+                                                            </div>
 
-                {/* Filter Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {/* Search */}
-                        <div className="md:col-span-2 lg:col-span-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Cari Produk</label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                </div>
-                                <input
-                                    type="text"
-                                    name="search"
-                                    value={filters.search}
-                                    onChange={handleFilterChange}
-                                    placeholder="Nama produk atau kode..."
-                                    className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                />
-                            </div>
-                        </div>
+                                                            {/* Status */}
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                                                <select
+                                                                    name="status"
+                                                                    value={filters.status}
+                                                                    onChange={handleFilterChange}
+                                                                    className="w-full border border-gray-200 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                >
+                                                                    <option value="">Semua Status</option>
+                                                                    <option value="active">Aktif</option>
+                                                                    <option value="inactive">Nonaktif</option>
+                                                                </select>
+                                                            </div>
 
-                        {/* Status */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                            <select
-                                name="status"
-                                value={filters.status}
-                                onChange={handleFilterChange}
-                                className="w-full border border-gray-200 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                                <option value="">Semua Status</option>
-                                <option value="active">Aktif</option>
-                                <option value="inactive">Nonaktif</option>
-                            </select>
-                        </div>
+                                                            {/* Category */}
+                                                            <div>
+                                                                <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                                                                <select
+                                                                    name="category"
+                                                                    value={filters.category}
+                                                                    onChange={handleFilterChange}
+                                                                    className="w-full border border-gray-200 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                >
+                                                                    <option value="">Semua Kategori</option>
+                                                                    {uniqueCategories.map(category => (
+                                                                        <option key={category} value={category}>{category}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        </div>
 
-                        {/* Category */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
-                            <select
-                                name="category"
-                                value={filters.category}
-                                onChange={handleFilterChange}
-                                className="w-full border border-gray-200 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                                <option value="">Semua Kategori</option>
-                                {uniqueCategories.map(category => (
-                                    <option key={category} value={category}>{category}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                                                        {/* Quick Filters */}
+                                                        <div className="mt-4 flex flex-wrap gap-3">
+                                                            <button
+                                                                onClick={() => setFilters(prev => ({ ...prev, expired: !prev.expired }))}
+                                                                className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.expired ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'} hover:bg-red-50 transition`}
+                                                            >
+                                                                <span className={`w-2 h-2 rounded-full mr-2 ${filters.expired ? 'bg-red-500' : 'bg-gray-400'}`}></span>
+                                                                Kadaluwarsa
+                                                            </button>
+                                                            
+                                                            <button
+                                                                onClick={() => setFilters(prev => ({ ...prev, nearExpiry: !prev.nearExpiry }))}
+                                                                className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.nearExpiry ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700'} hover:bg-yellow-50 transition`}
+                                                            >
+                                                                <span className={`w-2 h-2 rounded-full mr-2 ${filters.nearExpiry ? 'bg-yellow-500' : 'bg-gray-400'}`}></span>
+                                                                Hampir Kadaluwarsa
+                                                            </button>
+                                                            
+                                                            <button
+                                                                onClick={() => setFilters(prev => ({ ...prev, lowStock: !prev.lowStock }))}
+                                                                className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.lowStock ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-700'} hover:bg-orange-50 transition`}
+                                                            >
+                                                                <span className={`w-2 h-2 rounded-full mr-2 ${filters.lowStock ? 'bg-orange-500' : 'bg-gray-400'}`}></span>
+                                                                Stok Tipis
+                                                            </button>
+                                                            
+                                                            {Object.values(filters).some(f => f) && (
+                                                                <button
+                                                                    onClick={resetFilters}
+                                                                    className="flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm transition ml-auto"
+                                                                >
+                                                                    Reset Filter
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
 
-                    {/* Quick Filters */}
-                    <div className="mt-4 flex flex-wrap gap-3">
-                        <button
-                            onClick={() => setFilters(prev => ({ ...prev, expired: !prev.expired }))}
-                            className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.expired ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'} hover:bg-red-50 transition`}
-                        >
-                            <span className={`w-2 h-2 rounded-full mr-2 ${filters.expired ? 'bg-red-500' : 'bg-gray-400'}`}></span>
-                            Kadaluwarsa
-                        </button>
-                        
-                        <button
-                            onClick={() => setFilters(prev => ({ ...prev, nearExpiry: !prev.nearExpiry }))}
-                            className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.nearExpiry ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700'} hover:bg-yellow-50 transition`}
-                        >
-                            <span className={`w-2 h-2 rounded-full mr-2 ${filters.nearExpiry ? 'bg-yellow-500' : 'bg-gray-400'}`}></span>
-                            Hampir Kadaluwarsa
-                        </button>
-                        
-                        <button
-                            onClick={() => setFilters(prev => ({ ...prev, lowStock: !prev.lowStock }))}
-                            className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.lowStock ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-700'} hover:bg-orange-50 transition`}
-                        >
-                            <span className={`w-2 h-2 rounded-full mr-2 ${filters.lowStock ? 'bg-orange-500' : 'bg-gray-400'}`}></span>
-                            Stok Tipis
-                        </button>
-                        
-                        {Object.values(filters).some(f => f) && (
-                            <button
-                                onClick={resetFilters}
-                                className="flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm transition ml-auto"
-                            >
-                                Reset Filter
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* Products Table */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produk</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stok</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expired</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                                                    {/* Products Table */}
+                                                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                                        <div className="overflow-x-auto">
+                                                            <table className="min-w-full divide-y divide-gray-200">
+                                                                <thead className="bg-gray-50">
+                                                                    <tr>
+                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produk</th>
+                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
+                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
+                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stok</th>
+                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expired</th>
+                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                                        {auth.user?.role === 'warehouse' && (
+                                        <th
+                                            scope="col"
+                                            className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                        >
+                                            Aksi
+                                        </th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -583,49 +607,34 @@ export default function Index() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                            {hasPermission('edit-product') ? (
+                                           
+                                            {auth.user?.role === 'warehouse' && (
+                                            <>
                                                 <Link
                                                     href={route('products.edit', product.id)}
-                                                    className="text-blue-600 hover:text-blue-800 inline-flex items-center"
+                                                    className="text-blue-600 hover:text-blue-800 inline-flex items-center mr-2"
                                                 >
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                     </svg>
                                                     Edit
                                                 </Link>
-                                            ) : (
+
                                                 <button
-                                                    onClick={showPermissionAlert}
-                                                    className="text-gray-400 hover:text-gray-500 inline-flex items-center cursor-not-allowed"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                    </svg>
-                                                    Edit
-                                                </button>
-                                            )}
+                                            onClick={() => handleDelete(product.id, product.name)}
+                                            className="text-red-600 hover:text-red-800 inline-flex items-center"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                            Hapus
+                                        </button>
+
+
+                                            </>
+                                        )}
+
                                             
-                                            {hasPermission('delete-product') ? (
-                                                <button
-                                                    onClick={() => handleDelete(product.id)}
-                                                    className="text-red-600 hover:text-red-800 inline-flex items-center"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                    Hapus
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={showPermissionAlert}
-                                                    className="text-gray-400 hover:text-gray-500 inline-flex items-center cursor-not-allowed"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                    Hapus
-                                                </button>
-                                            )}
                                         </td>
                                     </tr>
                                 ))}
