@@ -13,14 +13,15 @@ return new class extends Migration {
             $table->string('name'); // Nama produk
             $table->foreignId('category_id')->constrained()->onDelete('cascade'); // Relasi ke kategori
             $table->text('description')->nullable(); // Deskripsi produk (opsional)
-            $table->decimal('purchase_price', 10, 2); // Harga beli
-            $table->decimal('selling_price', 10, 2); // Harga jual
+            $table->integer('purchase_price'); // Harga beli
+            $table->integer('selling_price'); // Harga jual
             $table->integer('stock'); // Stok tersedia
             $table->integer('min_stock')->default(0); // Stok minimum
             $table->string('unit'); // Satuan produk (tablet, strip, botol, dll)
             $table->string('image')->nullable(); // Gambar produk (jika ada)
             $table->date('entry_date')->nullable(); // Tanggal masuk produk
-            $table->date('expired_date')->nullable(); // Tanggal kadaluwarsa produk
+            $table->date('expired_date')->nullable();
+            $table->boolean('is_active')->default(true); 
             $table->timestamps(); // created_at dan updated_at
         });
     }

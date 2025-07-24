@@ -62,7 +62,7 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
       const wsData = products.map((product) => ({
         'Kode Produk': product.code || '-',
         'Nama Produk': product.name || '-',
-        Kategori: categories.find((cat) => cat.id === product.category_id)?.name || '-',
+        Kategori: product.category?.name || '-',
         Harga: product.price || 0,
         Stok: product.stock || 0,
         'Nilai Persediaan': (product.price || 0) * (product.stock || 0),
@@ -151,7 +151,7 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
           body: lowStockProducts.map((product) => [
             product.code || '-',
             product.name || '-',
-            categories.find((cat) => cat.id === product.category_id)?.name || '-',
+            product.category?.name || '-',
             product.stock || 0,
             `Rp ${(product.price || 0).toLocaleString('id-ID')}`,
           ]),
@@ -167,7 +167,7 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
         head: [['Nama Produk', 'Kategori', 'Terjual', 'Harga']],
         body: bestSellingProducts.map((product) => [
           product.name || '-',
-          categories.find((cat) => cat.id === product.category_id)?.name || '-',
+          product.category?.name || '-',
           product.sold_quantity || 0,
           `Rp ${(product.price || 0).toLocaleString('id-ID')}`,
         ]),
@@ -222,7 +222,7 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
               data={lowStockProducts.map((product) => [
                 product.code || '-',
                 product.name || '-',
-                categories.find((cat) => cat.id === product.category_id)?.name || '-',
+                product.category?.name || '-',
                 product.stock || 0,
                 `Rp ${(product.price || 0).toLocaleString('id-ID')}`,
               ])}
@@ -238,7 +238,7 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
               columns={['Nama Produk', 'Kategori', 'Terjual', 'Harga']}
               data={bestSellingProducts.map((product) => [
                 product.name || '-',
-                categories.find((cat) => cat.id === product.category_id)?.name || '-',
+                product.category?.name || '-',
                 product.sold_quantity || 0,
                 `Rp ${(product.price || 0).toLocaleString('id-ID')}`,
               ])}

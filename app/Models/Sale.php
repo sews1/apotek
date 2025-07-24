@@ -39,13 +39,25 @@ class Sale extends Model
         return $this->hasMany(SaleItem::class);
     }
 
-    public static function generateInvoiceNumber()
-    {
-        $lastSale = static::latest()->first();
-        $lastId = $lastSale ? $lastSale->id : 0;
-        
-        return 'INV-' . date('Ymd') . '-' . str_pad($lastId + 1, 4, '0', STR_PAD_LEFT);
+    public static function generateInvoiceNumber(): string
+{
+    $prefix = 'INV-' . date('Ymd');
+
+    $lastSaleToday = static::whereDate('created_at', now()->toDateString())
+        ->where('invoice_number', 'like', "$prefix-%")
+        ->orderByDesc('invoice_number')
+        ->first();
+
+    if ($lastSaleToday) {
+        $lastNumber = (int) substr($lastSaleToday->invoice_number, -4);
+        $newNumber = $lastNumber + 1;
+    } else {
+        $newNumber = 1;
     }
+
+    return $prefix . '-' . str_pad($newNumber, 4, '0', STR_PAD_LEFT);
+}
+
 
     public function updateStock()
     {

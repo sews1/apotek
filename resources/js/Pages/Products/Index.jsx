@@ -167,64 +167,63 @@ const hasPermission = (requiredPermission) => {
     // Get unique categories from products
     const uniqueCategories = [...new Set(products.data.map(product => product.category?.name).filter(Boolean))];
 
-    const toggleStatus = async (product) => {
-    // Cek permission
-    if (!hasPermission('toggle-product-status')) {
+const toggleStatus = async (product) => {
+    // Cek permission atau role warehouse
+    if (!hasPermission('toggle-product-status') && auth.user.role !== 'warehouse') {
         showPermissionAlert();
         return;
     }
 
-        // Prevent manual activation of expired products
-        if (!product.is_active && isProductExpired(product)) {
+    // Prevent manual activation of expired products
+    if (!product.is_active && isProductExpired(product)) {
         toast.error('Tidak dapat mengaktifkan produk yang sudah kadaluwarsa');
         return;
     }
 
-        const isActive = Number(product.is_active); // pastikan bentuk angka, bukan string
-        const action = isActive === 1 ? 'menonaktifkan' : 'mengaktifkan';
-        const consequences = isActive === 1 
-            ? '<p style="color:red;"><strong>Produk ini TIDAK AKAN MUNCUL</strong> di halaman penjualan setelah dinonaktifkan.</p>' 
-            : '<p style="color:green;"><strong>Produk ini AKAN MUNCUL KEMBALI</strong> di halaman penjualan setelah diaktifkan.</p>';
+    const isActive = Number(product.is_active);
+    const action = isActive === 1 ? 'menonaktifkan' : 'mengaktifkan';
+    const consequences = isActive === 1 
+        ? '<p style="color:red;"><strong>Produk ini TIDAK AKAN MUNCUL</strong> di halaman penjualan setelah dinonaktifkan.</p>' 
+        : '<p style="color:green;"><strong>Produk ini AKAN MUNCUL KEMBALI</strong> di halaman penjualan setelah diaktifkan.</p>';
 
-        const result = await Swal.fire({
-            title: isActive === 1 ? 'Nonaktifkan Produk?' : 'Aktifkan Produk?',
-            html: `
-                <p>Anda yakin ingin <strong>${action}</strong> produk:</p>
-                <p><strong>"${product.name}"</strong></p>
-                ${consequences}
-            `,
-            icon: isActive === 1 ? 'warning' : 'info',
-            showCancelButton: true,
-            confirmButtonText: `Ya, ${action}`,
-            cancelButtonText: 'Batal',
-            confirmButtonColor: isActive === 1 ? '#d33' : '#3085d6',
-            cancelButtonColor: '#aaa',
+    const result = await Swal.fire({
+        title: isActive === 1 ? 'Nonaktifkan Produk?' : 'Aktifkan Produk?',
+        html: `
+            <p>Anda yakin ingin <strong>${action}</strong> produk:</p>
+            <p><strong>"${product.name}"</strong></p>
+            ${consequences}
+        `,
+        icon: isActive === 1 ? 'warning' : 'info',
+        showCancelButton: true,
+        confirmButtonText: `Ya, ${action}`,
+        cancelButtonText: 'Batal',
+        confirmButtonColor: isActive === 1 ? '#d33' : '#3085d6',
+        cancelButtonColor: '#aaa',
+    });
+
+    if (result.isConfirmed) {
+        const oldStatus = product.is_active;
+        const newStatus = oldStatus === 1 ? 0 : 1;
+
+        // Optimistic update
+        setLocalProducts(prev => prev.map(p =>
+            p.id === product.id ? { ...p, is_active: newStatus } : p
+        ));
+
+        Inertia.put(route('products.toggle-status', product.id), {}, {
+            preserveScroll: true,
+            onError: () => {
+                // Rollback jika gagal
+                setLocalProducts(prev => prev.map(p =>
+                    p.id === product.id ? { ...p, is_active: oldStatus } : p
+                ));
+                toast.error('Gagal mengubah status produk');
+            },
+            onSuccess: () => {
+                toast.success(`Produk "${product.name}" berhasil ${oldStatus === 1 ? 'dinonaktifkan' : 'diaktifkan'}`);
+            }
         });
-
-        if (result.isConfirmed) {
-            // Simpan nilai lama
-            const oldStatus = product.is_active;
-            const newStatus = oldStatus === 1 ? 0 : 1;
-
-            // Optimistic update - langsung update ke status baru
-            setLocalProducts(prev => prev.map(p =>
-                p.id === product.id ? { ...p, is_active: newStatus } : p
-            ));
-
-            Inertia.put(route('products.toggle-status', product.id), {}, {
-                preserveScroll: true,
-                onError: () => {
-                    // Rollback ke status lama jika gagal
-                    setLocalProducts(prev => prev.map(p =>
-                        p.id === product.id ? { ...p, is_active: oldStatus } : p
-                    ));
-                    toast.error('Gagal mengubah status produk');
-                },
-                onSuccess: () => {
-                    toast.success(`Produk "${product.name}" berhasil ${oldStatus === 1 ? 'dinonaktifkan' : 'diaktifkan'}`);
-                }
-            });
-        }
+    }
     };
 
     const handleDelete = async (productId, productName) => {
@@ -393,124 +392,124 @@ const hasPermission = (requiredPermission) => {
                     
                     {/* Button Tambah Produk */}
                      <div className="flex gap-3">
-                                            {auth.user?.role === 'warehouse' && (
-                                                    <Link
-                                                        href={route('products.create')}
-                                                        className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg shadow hover:shadow-md transition-all"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                                                        </svg>
-                                                        Tambah Produk
-                                                    </Link>
-                                                )}
-                                                </div>
-                                     </div>
-                                                    {/* Filter Card */}
-                                                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
-                                                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                                            {/* Search */}
-                                                            <div className="md:col-span-2 lg:col-span-1">
-                                                                <label className="block text-sm font-medium text-gray-700 mb-1">Cari Produk</label>
-                                                                <div className="relative">
-                                                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                                        </svg>
-                                                                    </div>
-                                                                    <input
-                                                                        type="text"
-                                                                        name="search"
-                                                                        value={filters.search}
-                                                                        onChange={handleFilterChange}
-                                                                        placeholder="Nama produk atau kode..."
-                                                                        className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                                    />
-                                                                </div>
-                                                            </div>
+                        {auth.user?.role === 'warehouse' && (
+                                <Link
+                                    href={route('products.create')}
+                                    className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg shadow hover:shadow-md transition-all"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                                    </svg>
+                                    Tambah Produk
+                                </Link>
+                            )}
+                            </div>
+                    </div>
+                    {/* Filter Card */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {/* Search */}
+                            <div className="md:col-span-2 lg:col-span-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Cari Produk</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        name="search"
+                                        value={filters.search}
+                                        onChange={handleFilterChange}
+                                        placeholder="Nama produk atau kode..."
+                                        className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
 
-                                                            {/* Status */}
-                                                            <div>
-                                                                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                                                                <select
-                                                                    name="status"
-                                                                    value={filters.status}
-                                                                    onChange={handleFilterChange}
-                                                                    className="w-full border border-gray-200 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                                >
-                                                                    <option value="">Semua Status</option>
-                                                                    <option value="active">Aktif</option>
-                                                                    <option value="inactive">Nonaktif</option>
-                                                                </select>
-                                                            </div>
+                            {/* Status */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                <select
+                                    name="status"
+                                    value={filters.status}
+                                    onChange={handleFilterChange}
+                                    className="w-full border border-gray-200 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="">Semua Status</option>
+                                    <option value="active">Aktif</option>
+                                    <option value="inactive">Nonaktif</option>
+                                </select>
+                            </div>
 
-                                                            {/* Category */}
-                                                            <div>
-                                                                <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
-                                                                <select
-                                                                    name="category"
-                                                                    value={filters.category}
-                                                                    onChange={handleFilterChange}
-                                                                    className="w-full border border-gray-200 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                                >
-                                                                    <option value="">Semua Kategori</option>
-                                                                    {uniqueCategories.map(category => (
-                                                                        <option key={category} value={category}>{category}</option>
-                                                                    ))}
-                                                                </select>
-                                                            </div>
-                                                        </div>
+                            {/* Category */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                                <select
+                                    name="category"
+                                    value={filters.category}
+                                    onChange={handleFilterChange}
+                                    className="w-full border border-gray-200 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="">Semua Kategori</option>
+                                    {uniqueCategories.map(category => (
+                                        <option key={category} value={category}>{category}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
 
-                                                        {/* Quick Filters */}
-                                                        <div className="mt-4 flex flex-wrap gap-3">
-                                                            <button
-                                                                onClick={() => setFilters(prev => ({ ...prev, expired: !prev.expired }))}
-                                                                className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.expired ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'} hover:bg-red-50 transition`}
-                                                            >
-                                                                <span className={`w-2 h-2 rounded-full mr-2 ${filters.expired ? 'bg-red-500' : 'bg-gray-400'}`}></span>
-                                                                Kadaluwarsa
-                                                            </button>
-                                                            
-                                                            <button
-                                                                onClick={() => setFilters(prev => ({ ...prev, nearExpiry: !prev.nearExpiry }))}
-                                                                className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.nearExpiry ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700'} hover:bg-yellow-50 transition`}
-                                                            >
-                                                                <span className={`w-2 h-2 rounded-full mr-2 ${filters.nearExpiry ? 'bg-yellow-500' : 'bg-gray-400'}`}></span>
-                                                                Hampir Kadaluwarsa
-                                                            </button>
-                                                            
-                                                            <button
-                                                                onClick={() => setFilters(prev => ({ ...prev, lowStock: !prev.lowStock }))}
-                                                                className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.lowStock ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-700'} hover:bg-orange-50 transition`}
-                                                            >
-                                                                <span className={`w-2 h-2 rounded-full mr-2 ${filters.lowStock ? 'bg-orange-500' : 'bg-gray-400'}`}></span>
-                                                                Stok Tipis
-                                                            </button>
-                                                            
-                                                            {Object.values(filters).some(f => f) && (
-                                                                <button
-                                                                    onClick={resetFilters}
-                                                                    className="flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm transition ml-auto"
-                                                                >
-                                                                    Reset Filter
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                        {/* Quick Filters */}
+                        <div className="mt-4 flex flex-wrap gap-3">
+                            <button
+                                onClick={() => setFilters(prev => ({ ...prev, expired: !prev.expired }))}
+                                className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.expired ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'} hover:bg-red-50 transition`}
+                            >
+                                <span className={`w-2 h-2 rounded-full mr-2 ${filters.expired ? 'bg-red-500' : 'bg-gray-400'}`}></span>
+                                Kadaluwarsa
+                            </button>
+                            
+                            <button
+                                onClick={() => setFilters(prev => ({ ...prev, nearExpiry: !prev.nearExpiry }))}
+                                className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.nearExpiry ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700'} hover:bg-yellow-50 transition`}
+                            >
+                                <span className={`w-2 h-2 rounded-full mr-2 ${filters.nearExpiry ? 'bg-yellow-500' : 'bg-gray-400'}`}></span>
+                                Hampir Kadaluwarsa
+                            </button>
+                            
+                            <button
+                                onClick={() => setFilters(prev => ({ ...prev, lowStock: !prev.lowStock }))}
+                                className={`flex items-center px-3 py-1.5 rounded-full text-sm ${filters.lowStock ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-700'} hover:bg-orange-50 transition`}
+                            >
+                                <span className={`w-2 h-2 rounded-full mr-2 ${filters.lowStock ? 'bg-orange-500' : 'bg-gray-400'}`}></span>
+                                Stok Tipis
+                            </button>
+                            
+                            {Object.values(filters).some(f => f) && (
+                                <button
+                                    onClick={resetFilters}
+                                    className="flex items-center px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm transition ml-auto"
+                                >
+                                    Reset Filter
+                                </button>
+                            )}
+                        </div>
+                    </div>
 
-                                                    {/* Products Table */}
-                                                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                                                        <div className="overflow-x-auto">
-                                                            <table className="min-w-full divide-y divide-gray-200">
-                                                                <thead className="bg-gray-50">
-                                                                    <tr>
-                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produk</th>
-                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
-                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
-                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stok</th>
-                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expired</th>
-                                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                                        {auth.user?.role === 'warehouse' && (
+                    {/* Products Table */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produk</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stok</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expired</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        {auth.user?.role === 'warehouse' && (
                                         <th
                                             scope="col"
                                             className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -548,7 +547,7 @@ const hasPermission = (requiredPermission) => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm font-medium text-gray-900">
-                                                Rp {product.selling_price.toLocaleString('id-ID')}
+                                                Rp {Number(product.selling_price).toLocaleString('id-ID')}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">

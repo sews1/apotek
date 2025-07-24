@@ -15,21 +15,26 @@ use Illuminate\Support\Facades\Validator;
 
 class ProductController extends Controller
 {
-    // Validation rules that can be reused
-    protected $productValidationRules = [
-        'code' => 'required|max:20|unique:products',
-        'name' => 'required|max:100',
-        'category_id' => 'required|exists:categories,id',
-        'description' => 'nullable|string',
-        'purchase_price' => 'required|numeric|min:0',
-        'selling_price' => 'required|numeric|min:0',
-        'stock' => 'required|integer|min:0',
-        'min_stock' => 'required|integer|min:1',
-        'unit' => 'required|string|max:20',
-        'entry_date' => 'nullable|date',
-        'expired_date' => 'nullable|date|after_or_equal:entry_date',
-        'image' => 'nullable|image|max:2048',
-    ];
+    /**
+     * Buat aturan validasi produk dinamis.
+     */
+    protected function getValidationRules($productId = null)
+    {
+        return [
+            'code' => 'required|max:20|unique:products,code' . ($productId ? ',' . $productId : ''),
+            'name' => 'required|max:100',
+            'category_id' => 'required|exists:categories,id',
+            'description' => 'nullable|string',
+            'purchase_price' => 'required|integer|min:0',
+            'selling_price' => 'required|integer|min:0',
+            'stock' => 'required|integer|min:0',
+            'min_stock' => 'required|integer|min:1',
+            'unit' => 'required|string|max:20',
+            'entry_date' => 'nullable|date',
+            'expired_date' => 'nullable|date|after_or_equal:entry_date',
+            'image' => 'nullable|image|max:2048',
+        ];
+    }
 
     public function index()
     {
@@ -81,7 +86,7 @@ class ProductController extends Controller
             ->when($request->search, function ($q, $search) {
                 $q->where(function ($query) use ($search) {
                     $query->where('name', 'like', "%$search%")
-                          ->orWhere('code', 'like', "%$search%");
+                        ->orWhere('code', 'like', "%$search%");
                 });
             })
             ->when($request->category, function ($q, $category) {
@@ -106,7 +111,7 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), $this->productValidationRules);
+        $validator = Validator::make($request->all(), $this->getValidationRules());
 
         if ($validator->fails()) {
             return redirect()->back()
@@ -146,10 +151,7 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
-        $rules = $this->productValidationRules;
-        $rules['code'] = 'required|max:20|unique:products,code,' . $product->id;
-
-        $validator = Validator::make($request->all(), $rules);
+        $validator = Validator::make($request->all(), $this->getValidationRules($product->id));
 
         if ($validator->fails()) {
             return redirect()->back()
@@ -204,7 +206,7 @@ class ProductController extends Controller
             ->where('is_active', true)
             ->where(function ($query) use ($request) {
                 $query->where('name', 'like', '%' . $request->term . '%')
-                      ->orWhere('code', 'like', '%' . $request->term . '%');
+                    ->orWhere('code', 'like', '%' . $request->term . '%');
             })
             ->orderBy('name')
             ->limit(10)
@@ -221,20 +223,14 @@ class ProductController extends Controller
     public function reports()
     {
         try {
-            // Basic counts
             $totalProducts = Product::count();
             $totalStock = Product::sum('stock');
             $totalValue = Product::sum(DB::raw('stock * purchase_price'));
 
-            // Stock status products
             $lowStockProducts = $this->getLowStockProducts();
             $outOfStockProducts = $this->getOutOfStockProducts();
             $soonExpiredProducts = $this->getSoonExpiredProducts();
-
-            // Sales data
             $bestSellingProducts = $this->getBestSellingProducts();
-
-            // Category summary
             $productsByCategory = $this->getProductsByCategory($totalProducts);
 
             return response()->json([
@@ -255,7 +251,6 @@ class ProductController extends Controller
                     'soon_expired_products' => $soonExpiredProducts,
                 ]
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -271,9 +266,7 @@ class ProductController extends Controller
             ->whereColumn('stock', '<=', 'min_stock')
             ->where('stock', '>', 0)
             ->get()
-            ->map(function ($product) {
-                return $this->formatProductReport($product);
-            });
+            ->map(fn ($product) => $this->formatProductReport($product));
     }
 
     protected function getOutOfStockProducts()
@@ -281,9 +274,7 @@ class ProductController extends Controller
         return Product::with('category')
             ->where('stock', '<=', 0)
             ->get()
-            ->map(function ($product) {
-                return $this->formatProductReport($product);
-            });
+            ->map(fn ($product) => $this->formatProductReport($product));
     }
 
     protected function getSoonExpiredProducts()
@@ -303,34 +294,25 @@ class ProductController extends Controller
 
     protected function getBestSellingProducts()
     {
-        // Try to get from sale items first
         $bestSellingFromSales = SaleItem::select('product_id', DB::raw('SUM(quantity) as total_sold'))
             ->with(['product.category'])
             ->groupBy('product_id')
             ->orderByDesc('total_sold')
             ->limit(10)
             ->get()
-            ->map(function ($item) {
-                if ($item->product) {
-                    return $this->formatProductReport($item->product, $item->total_sold);
-                }
-                return null;
-            })
+            ->map(fn ($item) => $item->product ? $this->formatProductReport($item->product, $item->total_sold) : null)
             ->filter();
 
         if ($bestSellingFromSales->isNotEmpty()) {
             return $bestSellingFromSales;
         }
 
-        // Fallback to sold_quantity field
         return Product::with('category')
             ->where('sold_quantity', '>', 0)
             ->orderByDesc('sold_quantity')
             ->limit(10)
             ->get()
-            ->map(function ($product) {
-                return $this->formatProductReport($product, $product->sold_quantity);
-            });
+            ->map(fn ($product) => $this->formatProductReport($product, $product->sold_quantity));
     }
 
     protected function getProductsByCategory($totalProducts)
@@ -339,9 +321,9 @@ class ProductController extends Controller
             ->withCount('products')
             ->with(['products' => function ($q) {
                 $q->select('category_id')
-                  ->selectRaw('SUM(stock) as stock_sum')
-                  ->selectRaw('SUM(stock * purchase_price) as value_sum')
-                  ->groupBy('category_id');
+                    ->selectRaw('SUM(stock) as stock_sum')
+                    ->selectRaw('SUM(stock * purchase_price) as value_sum')
+                    ->groupBy('category_id');
             }])
             ->get()
             ->map(function ($category) use ($totalProducts) {
@@ -352,14 +334,12 @@ class ProductController extends Controller
                     'category_id' => $category->id,
                     'category_name' => $category->name,
                     'product_count' => $category->products_count,
-                    'percentage' => $totalProducts > 0 
-                        ? round(($category->products_count / $totalProducts) * 100, 2) 
-                        : 0,
+                    'percentage' => $totalProducts > 0 ? round(($category->products_count / $totalProducts) * 100, 2) : 0,
                     'stock' => $stockSum,
                     'total_value' => $valueSum,
                 ];
             })
-            ->filter(fn($item) => $item['product_count'] > 0);
+            ->filter(fn ($item) => $item['product_count'] > 0);
     }
 
     protected function formatProductReport($product, $soldQuantity = null)
@@ -375,18 +355,4 @@ class ProductController extends Controller
             'total_sold' => $soldQuantity ?? $product->sold_quantity,
         ];
     }
-
-    public function share(Request $request)
-    {
-        return array_merge(parent::share($request), [
-            'auth' => [
-                'user' => $request->user() ? [
-                    'id' => $request->user()->id,
-                    'name' => $request->user()->name,
-                    'roles' => $request->user()->roles->pluck('name'), // pastikan ada
-                ] : null,
-            ],
-        ]);
-    }
-
 }

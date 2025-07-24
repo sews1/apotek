@@ -166,7 +166,6 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
             ['Total Penjualan', `Rp ${totalSales.toLocaleString('id-ID')}`],
             ['Total Transaksi', totalTransactions],
             ['Total Item Terjual', totalItemsSold],
-            ['Jumlah Produk Berbeda', uniqueProducts.size],
             ['Rata-rata Penjualan Harian', `Rp ${parseFloat(avgDailySales).toLocaleString('id-ID')}`],
             ['Rata-rata Transaksi Harian', avgDailyTransactions],
             [''],
@@ -233,8 +232,7 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
         const statsTable = [
             ['Total Penjualan', `Rp ${totalSales.toLocaleString('id-ID')}`],
             ['Total Transaksi', totalTransactions.toString()],
-            ['Total Item Terjual', totalItemsSold.toString()],
-            ['Produk Berbeda', uniqueProducts.size.toString()],
+            ['Total Item Terjual', totalItemsSold.toString()]
             ['Rata-rata Penjualan Harian', `Rp ${parseFloat(avgDailySales).toLocaleString('id-ID')}`],
             ['Rata-rata Transaksi Harian', avgDailyTransactions]
         ];
@@ -471,16 +469,6 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
                             </svg>
                         }
                         color="purple"
-                    />
-                    <StatBox 
-                        title="Produk Berbeda" 
-                        value={uniqueProducts.size} 
-                        icon={
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                            </svg>
-                        }
-                        color="amber"
                     />
                 </div>
 

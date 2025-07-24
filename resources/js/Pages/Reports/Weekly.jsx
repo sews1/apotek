@@ -79,7 +79,6 @@ export default function WeeklyReport({ auth, weeklySales }) {
             ['Total Transaksi', totalTransactions],
             ['Rata-rata Transaksi', avgTransactionValue],
             ['Total Item Terjual', totalItems],
-            ['Produk Berbeda', uniqueProducts.size],
         ]);
 
         XLSX.utils.book_append_sheet(wb, wsMain, 'Data Penjualan');
@@ -104,7 +103,6 @@ export default function WeeklyReport({ auth, weeklySales }) {
         doc.text(`Total Penjualan: Rp ${totalSales.toLocaleString('id-ID')}`, 14, 25);
         doc.text(`Total Transaksi: ${totalTransactions}`, 14, 30);
         doc.text(`Rata-rata Transaksi: Rp ${avgTransactionValue.toLocaleString('id-ID')}`, 14, 35);
-        doc.text(`Item Terjual: ${totalItems} (${uniqueProducts.size} produk berbeda)`, 14, 40);
 
         // Daily summary
         doc.addPage();
@@ -217,16 +215,6 @@ export default function WeeklyReport({ auth, weeklySales }) {
                             </svg>
                         }
                         color="purple"
-                    />
-                    <StatBox 
-                        title="Produk Berbeda" 
-                        value={uniqueProducts.size} 
-                        icon={
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                            </svg>
-                        }
-                        color="amber"
                     />
                 </div>
 

@@ -29,7 +29,7 @@ class SaleController extends Controller
     {
         $products = Product::select('id', 'name', 'code', 'selling_price', 'stock')
             ->where('stock', '>', 0)
-            ->where('is_active', true)  // Tambahkan kondisi ini
+            ->where('is_active', true)
             ->get()
             ->map(fn($product) => [
                 ...$product->toArray(),
@@ -64,12 +64,26 @@ class SaleController extends Controller
                 abort(422, 'Jumlah pembayaran kurang dari total belanja.');
             }
 
+            // Retry untuk menangani kemungkinan duplikat invoice_number
+            $invoice = null;
+            for ($i = 0; $i < 5; $i++) {
+                $invoice = Sale::generateInvoiceNumber();
+                if (!Sale::where('invoice_number', $invoice)->exists()) {
+                    break;
+                }
+                usleep(100000); // delay 100ms
+            }
+
+            if (Sale::where('invoice_number', $invoice)->exists()) {
+                abort(500, 'Gagal membuat nomor invoice unik. Silakan coba lagi.');
+            }
+
             $sale = Sale::create([
-                'invoice_number' => Sale::generateInvoiceNumber(),
+                'invoice_number' => $invoice,
                 'user_id' => auth()->id(),
                 'customer_name' => $validated['customer_name'] ?? null,
                 'customer_phone' => $validated['customer_phone'] ?? null,
-                'total' => $total,  // hanya ini
+                'total' => $total,
                 'payment_amount' => $validated['payment_amount'],
                 'change_amount' => $validated['payment_amount'] - $total,
                 'payment_method' => $validated['payment_method'],

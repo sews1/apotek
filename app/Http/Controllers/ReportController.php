@@ -2,9 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Sale;
-use App\Models\Product;
-use App\Models\Category;
+use App\Models\{Sale, Product, Category, User, ActivityLog};
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
@@ -12,28 +10,90 @@ use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
-  public function index()
-{
-    // Ambil data penjualan untuk weekly, monthly, yearly
-    $weeklySales = $this->getWeeklySales();
-    $monthlySales = $this->getMonthlySales();
-    $yearlySales = $this->getYearlySales();
+    public function index()
+    {
+        $weeklySales = $this->getWeeklySales();
+        $monthlySales = $this->getMonthlySales();
+        $yearlySales = $this->getYearlySales();
 
-    // Ambil data produk dengan kategori terkait (eager loading)
-    $products = Product::with('category')->get();
-    $categories = Category::all();
+        $products = Product::with('category')->get();
+        $categories = Category::all();
 
-    // Return view Inertia dengan data lengkap
-    return Inertia::render('ProductReport', [
-        'weeklySales' => $weeklySales ?: [],
-        'monthlySales' => $monthlySales ?: [],
-        'yearlySales' => $yearlySales ?: [],
-        'products' => $products ?: [],
-        'categories' => $categories ?: [],
-    ]);
-}
+        return Inertia::render('ProductReport', [
+            'weeklySales' => $weeklySales,
+            'monthlySales' => $monthlySales,
+            'yearlySales' => $yearlySales,
+            'products' => $products,
+            'categories' => $categories,
+        ]);
+    }
 
+    public function staff(Request $request)
+    {
+        try {
+            $startDate = $request->input('start_date');
+            $endDate = $request->input('end_date');
+            $employeeId = $request->input('employee_id');
+            $activityType = $request->input('activity_type');
 
+            $query = ActivityLog::with('user.roles')
+                ->when($startDate && $endDate, fn($q) =>
+                    $q->whereBetween('created_at', [
+                        Carbon::parse($startDate)->startOfDay(),
+                        Carbon::parse($endDate)->endOfDay()
+                    ])
+                )
+                ->when($employeeId, fn($q) => $q->where('user_id', $employeeId))
+                ->when($activityType, fn($q) => $q->where('activity_type', $activityType))
+                ->orderBy('created_at', 'desc');
+
+            $activityReports = $query->get()->map(fn($activity) => [
+                'activity_id' => $activity->id,
+                'created_at' => $activity->created_at->toDateTimeString(),
+                'employee_name' => $activity->user?->name ?? '-',
+                'role_name' => $activity->user?->roles->first()?->name ?? '-',
+                'activity_type' => $activity->activity_type,
+                'description' => $activity->description,
+                'ip_address' => $activity->ip_address,
+                'user_agent' => $activity->user_agent,
+            ]);
+
+            $employees = User::with('roles')->get()->map(fn($user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'role' => $user->roles->first(),
+            ]);
+
+            $activityTypes = ActivityLog::select('activity_type')->distinct()->pluck('activity_type')->filter()->values();
+
+            return Inertia::render('Reports/Staff', [
+                'activityReports' => $activityReports,
+                'employees' => $employees,
+                'activityTypes' => $activityTypes,
+                'filters' => [
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
+                    'employee_id' => $employeeId,
+                    'activity_type' => $activityType,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in staff activity report: ' . $e->getMessage());
+
+            return Inertia::render('Reports/Staff', [
+                'activityReports' => [],
+                'employees' => [],
+                'activityTypes' => [],
+                'filters' => [
+                    'start_date' => null,
+                    'end_date' => null,
+                    'employee_id' => null,
+                    'activity_type' => null,
+                ],
+                'error' => 'Terjadi kesalahan saat memuat laporan aktivitas staff.',
+            ]);
+        }
+    }
 
     public function weekly(Request $request)
     {
@@ -76,92 +136,83 @@ class ReportController extends Controller
     }
 
     public function product(Request $request)
-{
-    try {
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
-        $categoryId = $request->input('category_id');
+    {
+        try {
+            $startDate = $request->input('start_date');
+            $endDate = $request->input('end_date');
+            $categoryId = $request->input('category_id');
 
-        // Ambil semua produk (filter berdasarkan kategori jika ada)
-        $products = Product::with('category')
-            ->when($categoryId, fn($q) => $q->where('category_id', $categoryId))
-            ->get();
+            $products = Product::with('category')
+                ->when($categoryId, fn($q) => $q->where('category_id', $categoryId))
+                ->get();
 
-        // Ambil penjualan berdasarkan produk
-        $salesQuery = Sale::with(['items.product']);
+            $salesQuery = Sale::with(['items.product']);
+            if ($startDate && $endDate) {
+                $salesQuery->whereBetween('created_at', [
+                    Carbon::parse($startDate)->startOfDay(),
+                    Carbon::parse($endDate)->endOfDay()
+                ]);
+            }
+            $sales = $salesQuery->get();
 
-        if ($startDate && $endDate) {
-            $salesQuery->whereBetween('created_at', [
-                Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
+            $salesItems = $sales->flatMap(fn($sale) => $sale->items)->groupBy('product_id');
+
+            $productSales = $products->map(function ($product) use ($salesItems) {
+                $items = $salesItems->get($product->id, collect());
+                return [
+                    'product_id' => $product->id,
+                    'product_code' => $product->code,
+                    'product_name' => $product->name,
+                    'category_id' => $product->category_id,
+                    'category_name' => $product->category->name ?? '-',
+                    'current_stock' => (int) $product->stock,
+                    'total_quantity_sold' => $items->sum('quantity'),
+                    'total_revenue' => $items->sum('subtotal'),
+                    'purchase_price' => (float) $product->purchase_price,
+                    'selling_price' => (float) $product->selling_price,
+                ];
+            });
+
+            $categories = Category::where('is_active', true)->get();
+
+            $summary = [
+                'total_products' => $productSales->count(),
+                'total_quantity_sold' => $productSales->sum('total_quantity_sold'),
+                'total_revenue' => $productSales->sum('total_revenue'),
+                'total_stock_value' => $productSales->sum(fn($item) => $item['current_stock'] * $item['purchase_price']),
+            ];
+
+            return Inertia::render('Reports/Product', [
+                'productSales' => $productSales,
+                'categories' => $categories,
+                'summary' => $summary,
+                'filters' => [
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
+                    'category_id' => $categoryId,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in product report: ' . $e->getMessage());
+
+            return Inertia::render('Reports/Product', [
+                'productSales' => collect([]),
+                'categories' => Category::where('is_active', true)->get(),
+                'summary' => [
+                    'total_products' => 0,
+                    'total_quantity_sold' => 0,
+                    'total_revenue' => 0,
+                    'total_stock_value' => 0,
+                ],
+                'filters' => [
+                    'start_date' => null,
+                    'end_date' => null,
+                    'category_id' => null,
+                ],
+                'error' => 'Terjadi kesalahan saat memuat data laporan produk.',
             ]);
         }
-
-        $sales = $salesQuery->get();
-
-        // Ambil semua item penjualan lalu group berdasarkan produk
-        $salesItems = $sales->flatMap(fn($sale) => $sale->items)
-            ->groupBy('product_id');
-
-        // Gabungkan semua data produk dengan data penjualannya
-        $productSales = $products->map(function ($product) use ($salesItems) {
-            $items = $salesItems->get($product->id, collect());
-
-            return [
-                'product_id' => $product->id,
-                'product_code' => $product->code ?? '-',
-                'product_name' => $product->name,
-                'category_id' => $product->category_id,
-                'category_name' => $product->category->name ?? '-',
-                'current_stock' => (int) $product->stock,
-                'total_quantity_sold' => $items->sum('quantity'),
-                'total_revenue' => $items->sum('subtotal'),
-                'purchase_price' => (float) $product->purchase_price,
-                'selling_price' => (float) $product->selling_price,
-            ];
-        });
-
-        $categories = Category::where('is_active', true)->get();
-
-        $summary = [
-            'total_products' => $productSales->count(),
-            'total_quantity_sold' => $productSales->sum('total_quantity_sold'),
-            'total_revenue' => $productSales->sum('total_revenue'),
-            'total_stock_value' => $productSales->sum(fn($item) => $item['current_stock'] * $item['purchase_price']),
-        ];
-
-        return Inertia::render('Reports/Product', [
-            'productSales' => $productSales,
-            'categories' => $categories,
-            'summary' => $summary,
-            'filters' => [
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'category_id' => $categoryId,
-            ],
-        ]);
-    } catch (\Exception $e) {
-        \Log::error('Error in product report: ' . $e->getMessage());
-
-        return Inertia::render('Reports/Product', [
-            'productSales' => collect([]),
-            'categories' => Category::where('is_active', true)->get(),
-            'summary' => [
-                'total_products' => 0,
-                'total_quantity_sold' => 0,
-                'total_revenue' => 0,
-                'total_stock_value' => 0,
-            ],
-            'filters' => [
-                'start_date' => null,
-                'end_date' => null,
-                'category_id' => null,
-            ],
-            'error' => 'Terjadi kesalahan saat memuat data laporan produk.',
-        ]);
     }
-}
-
 
     public function supplier(Request $request)
     {
@@ -170,14 +221,12 @@ class ReportController extends Controller
             $endDate = $request->input('end_date');
 
             $salesQuery = Sale::with('items.product.supplier');
-
             if ($startDate && $endDate) {
                 $salesQuery->whereBetween('created_at', [
                     Carbon::parse($startDate)->startOfDay(),
                     Carbon::parse($endDate)->endOfDay()
                 ]);
             }
-
             $sales = $salesQuery->get();
 
             $supplierSales = $sales->flatMap(fn($sale) => $sale->items)
@@ -185,7 +234,6 @@ class ReportController extends Controller
                 ->groupBy(fn($item) => $item->product->supplier->id)
                 ->map(function ($items, $supplierId) {
                     $supplier = $items->first()->product->supplier;
-
                     return [
                         'supplier_id' => $supplierId,
                         'supplier_name' => $supplier->name,
@@ -194,8 +242,7 @@ class ReportController extends Controller
                         'total_quantity_sold' => $items->sum('quantity'),
                         'total_revenue' => $items->sum('subtotal'),
                     ];
-                })
-                ->values();
+                })->values();
 
             $summary = [
                 'total_suppliers' => $supplierSales->count(),
@@ -229,8 +276,6 @@ class ReportController extends Controller
             ]);
         }
     }
-
-    // ---------------- PRIVATE HELPERS ---------------- //
 
     private function getWeeklySales(Carbon $startDate = null, Carbon $endDate = null)
     {
@@ -303,5 +348,4 @@ class ReportController extends Controller
                 ]),
             ]);
     }
-
 }

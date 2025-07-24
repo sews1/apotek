@@ -10,6 +10,7 @@ class SupplierController extends Controller
 {
     public function index()
     {
+        // Ambil semua supplier (field items langsung di tabel)
         $suppliers = Supplier::latest()->get();
 
         return Inertia::render('Suppliers/Index', [
@@ -28,11 +29,13 @@ class SupplierController extends Controller
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string',
+            'items' => 'nullable|string',
         ]);
 
-        Supplier::create($request->only('name', 'phone', 'address'));
+        Supplier::create($request->only('name', 'phone', 'address', 'items'));
 
-        return redirect()->route('suppliers.index')->with('success', 'Supplier berhasil ditambahkan.');
+        return redirect()->route('suppliers.index')
+            ->with('success', 'Supplier berhasil ditambahkan.');
     }
 
     public function edit(Supplier $supplier)
@@ -48,17 +51,20 @@ class SupplierController extends Controller
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string',
+            'items' => 'nullable|string',
         ]);
 
-        $supplier->update($request->only('name', 'phone', 'address'));
+        $supplier->update($request->only('name', 'phone', 'address', 'items'));
 
-        return redirect()->route('suppliers.index')->with('success', 'Supplier berhasil diperbarui.');
+        return redirect()->route('suppliers.index')
+            ->with('success', 'Supplier berhasil diperbarui.');
     }
 
     public function destroy(Supplier $supplier)
     {
         $supplier->delete();
 
-        return redirect()->route('suppliers.index')->with('success', 'Supplier berhasil dihapus.');
+        return redirect()->route('suppliers.index')
+            ->with('success', 'Supplier berhasil dihapus.');
     }
 }

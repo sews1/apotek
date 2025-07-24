@@ -270,7 +270,7 @@ export default function Authenticated({ auth = {}, header, children }) {
             roles: ["owner"],
         },
         {
-            href: "/reports/member",
+            href: "/reports/staff",
             label: "Laporan Data Karyawan",
             icon: (
                 <svg

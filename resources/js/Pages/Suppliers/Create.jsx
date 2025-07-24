@@ -7,6 +7,7 @@ export default function Create({ auth }) {
         name: '',
         phone: '',
         address: '',
+        item: '', // ✅ Tambah state items
     });
 
     const handleSubmit = (e) => {
@@ -50,6 +51,17 @@ export default function Create({ auth }) {
                             onChange={(e) => setData('address', e.target.value)}
                         />
                         {errors.address && <p className="text-red-600 text-sm mt-1">{errors.address}</p>}
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Items</label>
+                        <textarea
+                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
+                            placeholder="Pisahkan item dengan koma, misal: Paracetamol, Vitamin C"
+                            value={data.item}
+                            onChange={(e) => setData('item', e.target.value)}
+                        />
+                        {errors.item && <p className="text-red-600 text-sm mt-1">{errors.item}</p>}
                     </div>
 
                     <div className="flex justify-between">

@@ -109,8 +109,7 @@ export default function Create({ auth, categories }) {
                     value={data.code}
                     onChange={e => setData('code', e.target.value)}
                     className="block w-full pr-10 sm:text-sm border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 py-2.5 transition-all duration-200"
-                    placeholder="Akan diisi otomatis"
-                    readOnly
+                    placeholder="Masukkan kode produk"
                   />
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                     <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -203,7 +202,7 @@ export default function Create({ auth, categories }) {
 
               <div className="space-y-1">
                 <label htmlFor="stock" className="block text-sm font-medium text-gray-700">
-                  Stok Saat Ini <span className="text-red-500">*</span>
+                  Stok Beli <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1 relative rounded-lg shadow-sm">
                   <input
@@ -321,52 +320,7 @@ export default function Create({ auth, categories }) {
             </div>
 
             {/* Image Upload Section */}
-            <div className="px-6 py-5 bg-gray-50">
-              <h2 className="text-lg font-medium text-gray-900">Gambar Produk</h2>
-              <p className="mt-1 text-sm text-gray-500">Unggah gambar produk untuk tampilan yang lebih baik</p>
-            </div>
-
-            <div className="px-6 py-5">
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-gray-700">Gambar Produk</label>
-                <div className="mt-1 flex justify-center px-6 pt-8 pb-8 border-2 border-gray-300 border-dashed rounded-xl bg-gray-50 hover:bg-gray-100 transition-all duration-200">
-                  <div className="space-y-3 text-center">
-                    <svg
-                      className="mx-auto h-12 w-12 text-gray-400"
-                      stroke="currentColor"
-                      fill="none"
-                      viewBox="0 0 48 48"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <div className="flex text-sm text-gray-600 justify-center">
-                      <label
-                        htmlFor="file-upload"
-                        className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                      >
-                        <span>Upload gambar</span>
-                        <input
-                          id="file-upload"
-                          name="file-upload"
-                          type="file"
-                          className="sr-only"
-                          onChange={e => setData('image', e.target.files[0])}
-                        />
-                      </label>
-                      <p className="pl-1">atau drag and drop</p>
-                    </div>
-                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
-                  </div>
-                </div>
-                {errors.image && <p className="mt-1 text-sm text-red-600">{errors.image}</p>}
-              </div>
-            </div>
+         
 
             {/* Submit Button */}
             <div className="px-6 py-4 bg-gray-50 text-right">

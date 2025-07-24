@@ -126,5 +126,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/yearly', [ReportController::class, 'yearly'])->name('yearly');
         Route::get('/product', [ReportController::class, 'product'])->name('product');
         Route::get('/supplier', [ReportController::class, 'supplier'])->name('supplier');
+        Route::get('/staff', [ReportController::class, 'staff'])->name('staff');
     });
 });

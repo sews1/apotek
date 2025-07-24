@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8" />
     <title>Invoice #{{ $sale->invoice_number }}</title>
@@ -18,7 +19,7 @@
         .container {
             background: #fff;
             padding: 30px 40px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
         }
 
@@ -68,7 +69,7 @@
         .items {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 30px;
+            margin-bottom: 15px;
         }
 
         .items thead {
@@ -76,7 +77,8 @@
             color: #fff;
         }
 
-        .items th, .items td {
+        .items th,
+        .items td {
             padding: 12px 15px;
             border: 1px solid #ddd;
             text-align: left;
@@ -92,14 +94,36 @@
             text-align: right;
         }
 
-        .total {
+        .summary {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        .summary td {
+            padding: 8px 15px;
             text-align: right;
-            border-top: 2px solid #2980b9;
-            padding-top: 15px;
-            font-size: 17px;
+        }
+
+        .summary td:first-child {
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .total-row {
             font-weight: 700;
+            font-size: 16px;
             color: #2980b9;
-            margin-bottom: 40px;
+        }
+
+        .payment-row {
+            border-top: 1px solid #eee;
+            padding-top: 8px;
+        }
+
+        .change-row {
+            font-weight: 600;
+            color: #27ae60;
         }
 
         .payment-method {
@@ -141,15 +165,25 @@
             margin-top: 20px;
         }
 
+        .barcode {
+            text-align: center;
+            margin: 20px 0;
+            padding: 10px;
+            border-top: 1px dashed #ccc;
+            border-bottom: 1px dashed #ccc;
+        }
+
         @media print {
             body {
                 margin: 0;
                 background: #fff;
                 -webkit-print-color-adjust: exact;
             }
+
             .no-print {
                 display: none;
             }
+
             .container {
                 box-shadow: none;
                 margin: 0;
@@ -157,6 +191,7 @@
                 max-width: 100%;
                 border-radius: 0;
             }
+
             .items th {
                 background-color: #2980b9 !important;
                 -webkit-print-color-adjust: exact;
@@ -165,21 +200,34 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
             <h1>Apotek Hero Farma</h1>
             <p>Jl. Ngemplak, Ngampo, Kismoyoso, Kec. Ngemplak, Kabupaten Boyolali, Jawa Tengah 57375</p>
-            <p>Telp: 08123456789</p>
+            <p>Telp: 08123456789 | NPWP: 01.234.567.8-912.345</p>
         </div>
 
         <div class="info">
             <table>
-                <tr><td>No. Invoice</td><td>: {{ $sale->invoice_number }}</td></tr>
-                <tr><td>Tanggal</td><td>: {{ $sale->created_at->format('d/m/Y H:i') }}</td></tr>
-                <tr><td>Kasir</td><td>: {{ $sale->user->name }}</td></tr>
-                @if($sale->customer_name)
-                <tr><td>Pelanggan</td><td>: {{ $sale->customer_name }}</td></tr>
+                <tr>
+                    <td>No. Invoice</td>
+                    <td>: {{ $sale->invoice_number }}</td>
+                </tr>
+                <tr>
+                    <td>Tanggal</td>
+                    <td>: {{ $sale->created_at->format('d/m/Y H:i') }}</td>
+                </tr>
+                <tr>
+                    <td>Kasir</td>
+                    <td>: {{ $sale->user->name }}</td>
+                </tr>
+                @if ($sale->customer_name)
+                    <tr>
+                        <td>Pelanggan</td>
+                        <td>: {{ $sale->customer_name }}</td>
+                    </tr>
                 @endif
             </table>
         </div>
@@ -194,25 +242,55 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($sale->items as $item)
-                <tr>
-                    <td>{{ $item->product->name }}</td>
-                    <td>Rp {{ number_format($item->price, 0, ',', '.') }}</td>
-                    <td>{{ $item->quantity }}</td>
-                    <td>Rp {{ number_format($item->subtotal, 0, ',', '.') }}</td>
-                </tr>
+                @foreach ($sale->items as $item)
+                    <tr>
+                        <td>{{ $item->product->name }}</td>
+                        <td>Rp {{ number_format($item->price, 0, ',', '.') }}</td>
+                        <td>{{ $item->quantity }}</td>
+                        <td>Rp {{ number_format($item->subtotal, 0, ',', '.') }}</td>
+                    </tr>
                 @endforeach
             </tbody>
         </table>
 
-        <div class="total">
-            <div>Total: Rp {{ number_format($sale->total, 0, ',', '.') }}</div>
-            <div class="payment-method">Metode Pembayaran: {{ ucfirst($sale->payment_method) }}</div>
+        <table class="summary">
+            <tr>
+                <td>Subtotal</td>
+                <td>Rp {{ number_format($sale->subtotal, 0, ',', '.') }}</td>
+            </tr>
+            @if ($sale->discount > 0)
+                <tr>
+                    <td>Diskon</td>
+                    <td>Rp {{ number_format($sale->discount, 0, ',', '.') }}</td>
+                </tr>
+            @endif
+            <tr class="total-row">
+                <td>Total</td>
+                <td>Rp {{ number_format($sale->total, 0, ',', '.') }}</td>
+            </tr>
+            <tr class="payment-row">
+                <td>Uang Diterima</td>
+                {{-- <td>Rp {{ number_format($sale->amount_received - $sale->total, 0, ',', '.') }}</td> --}}
+                <td>Rp {{ number_format($sale->payment_amount, 0, ',', '.') }}</td>
+            </tr>
+            <tr class="change-row">
+                <td>Kembalian</td>
+                <td>Rp {{ number_format($sale->change_amount, 0, ',', '.') }}</td>
+            </tr>
+        </table>
+
+        <div class="payment-method">
+            Metode Pembayaran: {{ ucfirst($sale->payment_method) }}
+        </div>
+
+        <div class="barcode">
+            {{ $sale->invoice_number }} | {{ $sale->created_at->format('dmY') }}
         </div>
 
         <div class="footer">
             <p>Terima kasih telah berbelanja di Apotek Hero Farma</p>
             <p><small>Barang yang sudah dibeli tidak dapat ditukar atau dikembalikan</small></p>
+            <p><small>*Simpan invoice ini sebagai bukti pembelian</small></p>
         </div>
     </div>
 
@@ -220,4 +298,5 @@
         <button class="print-btn" onclick="window.print()">🖨️ Cetak Invoice</button>
     </div>
 </body>
+
 </html>
