@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Authenticated from '@/Layouts/Authenticated';
 import { Head, Link } from '@inertiajs/react';
+import axios from 'axios';
 import { Bar, Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -20,7 +21,8 @@ import {
     FiPackage, FiAlertTriangle, FiClock, FiShoppingCart, 
     FiDollarSign, FiTrendingUp, FiTrendingDown, 
     FiRefreshCw, FiDownload, FiPrinter, FiSearch,
-    FiCalendar, FiUser, FiPieChart, FiBarChart2, FiPlus
+    FiCalendar, FiUser, FiPieChart, FiBarChart2, FiPlus,
+    FiAlertCircle, FiCheckCircle
 } from 'react-icons/fi';
 
 // Register ChartJS components
@@ -53,65 +55,64 @@ export default function Dashboard({
     const [searchQuery, setSearchQuery] = useState('');
     const [activeChart, setActiveChart] = useState('bar');
     const [weeklyStats, setWeeklyStats] = useState({
-        sales: 0,
-        revenue: 0,
-        comparison: 0
+        current_week: { sales: 0, revenue: 0 },
+        previous_week: { sales: 0, revenue: 0 },
+        comparison: { sales: 0, revenue: 0 }
     });
 
-    // Calculate weekly stats
+    // Fetch weekly stats from backend
     useEffect(() => {
-        if (recentSales.length > 0) {
-            calculateWeeklyStats();
+        fetchWeeklyStats();
+    }, []);
+
+    const fetchWeeklyStats = async () => {
+        try {
+            const response = await axios.get('/dashboard/weekly-stats');
+            setWeeklyStats(response.data);
+        } catch (error) {
+            console.error('Error fetching weekly stats:', error);
+            // Fallback calculation if API fails
+            calculateWeeklyStatsFromRecentSales();
         }
-    }, [recentSales]);
-
-    const calculateWeeklyStats = () => {
-    const now = new Date();
-    const oneWeekAgo = new Date(now);
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    
-    const twoWeeksAgo = new Date(now);
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-
-    // Format tanggal untuk konsistensi
-    const formatDate = (date) => {
-        return new Date(date).toISOString().split('T')[0];
     };
 
-    // Filter penjualan minggu ini (7 hari terakhir)
-    const currentWeekSales = recentSales.filter(sale => {
-        const saleDate = new Date(sale.date);
-        return saleDate >= oneWeekAgo && saleDate <= now;
-    });
+    // Fallback calculation if API is not available
+    const calculateWeeklyStatsFromRecentSales = () => {
+        const now = new Date();
+        const oneWeekAgo = new Date(now);
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    // Filter penjualan minggu sebelumnya (7 hari sebelum minggu ini)
-    const previousWeekSales = recentSales.filter(sale => {
-        const saleDate = new Date(sale.date);
-        return saleDate >= twoWeeksAgo && saleDate < oneWeekAgo;
-    });
+        const currentWeekSales = recentSales.filter(sale => {
+            const saleDate = new Date(sale.date);
+            return saleDate >= oneWeekAgo && saleDate <= now;
+        });
 
-    // Hitung total pendapatan
-    const currentWeekRevenue = currentWeekSales.reduce((sum, sale) => sum + parseFloat(sale.total), 0);
-    const previousWeekRevenue = previousWeekSales.reduce((sum, sale) => sum + parseFloat(sale.total), 0);
+        const currentWeekRevenue = currentWeekSales.reduce((sum, sale) => sum + sale.total, 0);
 
-    // Hitung perbandingan dengan minggu lalu
-    let comparison;
-    if (previousWeekRevenue === 0) {
-        comparison = currentWeekRevenue > 0 ? 100 : 0; // Jika minggu lalu 0 dan minggu ini ada penjualan = +100%
-    } else {
-        comparison = ((currentWeekRevenue - previousWeekRevenue) / previousWeekRevenue) * 100;
-    }
+        setWeeklyStats({
+            current_week: {
+                sales: currentWeekSales.length,
+                revenue: currentWeekRevenue
+            },
+            previous_week: { sales: 0, revenue: 0 },
+            comparison: { sales: 0, revenue: 0 }
+        });
+    };
 
-    // Format nilai perbandingan
-    const formattedComparison = Math.round(comparison * 10) / 10; // Pembulatan 1 angka di belakang koma
+    // Format currency
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(amount);
+    };
 
-    setWeeklyStats({
-        sales: currentWeekSales.length,
-        revenue: currentWeekRevenue,
-        comparison: formattedComparison,
-        previousWeekRevenue: previousWeekRevenue // Menyimpan data minggu lalu untuk referensi
-    });
-};
+    // Format number
+    const formatNumber = (number) => {
+        return new Intl.NumberFormat('id-ID').format(number);
+    };
 
     // Filter recent sales by date range
     const filteredRecentSales = useMemo(() => {
@@ -129,7 +130,8 @@ export default function Dashboard({
         
         return lowStockItems.filter(item => 
             item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.code.toLowerCase().includes(searchQuery.toLowerCase())
+            item.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()))
         );
     }, [lowStockItems, searchQuery]);
 
@@ -139,7 +141,8 @@ export default function Dashboard({
         
         return nearExpiredItems.filter(item => 
             item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.code.toLowerCase().includes(searchQuery.toLowerCase())
+            item.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()))
         );
     }, [nearExpiredItems, searchQuery]);
 
@@ -147,7 +150,7 @@ export default function Dashboard({
     const getSalesValue = () => {
         switch (period) {
             case 'mingguan':
-                return weeklyStats.sales;
+                return weeklyStats.current_week.sales;
             case 'bulanan':
                 return stats.monthly_sales ?? 0;
             case 'tahunan':
@@ -162,7 +165,7 @@ export default function Dashboard({
     const getRevenueValue = () => {
         switch (period) {
             case 'mingguan':
-                return weeklyStats.revenue;
+                return weeklyStats.current_week.revenue;
             case 'bulanan':
                 return stats.monthly_revenue ?? 0;
             case 'tahunan':
@@ -174,31 +177,27 @@ export default function Dashboard({
     };
 
     // Get comparison trend
-    // Get comparison trend
-const getComparisonTrend = () => {
-    if (period === 'mingguan') {
-        const comparison = weeklyStats.comparison;
-        const absoluteValue = Math.abs(comparison);
-        
-        if (weeklyStats.previousWeekRevenue === 0) {
+    const getComparisonTrend = () => {
+        if (period === 'mingguan') {
+            const revenueComparison = weeklyStats.comparison.revenue;
+            const salesComparison = weeklyStats.comparison.sales;
+            
             return {
-                trend: comparison > 0 ? 'up' : 'neutral',
-                value: comparison > 0 ? `+${absoluteValue}% (tidak ada data minggu lalu)` : '0% (tidak ada perubahan)'
+                trend: revenueComparison >= 0 ? 'up' : 'down',
+                value: `${revenueComparison >= 0 ? '+' : ''}${revenueComparison.toFixed(1)}% dari minggu lalu`,
+                salesTrend: salesComparison >= 0 ? 'up' : 'down',
+                salesValue: `${salesComparison >= 0 ? '+' : ''}${salesComparison.toFixed(1)}% penjualan`
             };
         }
         
+        // Default trend untuk periode lain (bisa dikembangkan)
         return {
-            trend: comparison >= 0 ? 'up' : 'down',
-            value: `${comparison >= 0 ? '+' : ''}${absoluteValue}% dari minggu lalu`
+            trend: 'up',
+            value: 'Data perbandingan tidak tersedia',
+            salesTrend: 'up',
+            salesValue: ''
         };
-    }
-    
-    // Default trend untuk periode lain
-    return {
-        trend: 'up',
-        value: '10% dari periode lalu'
     };
-};
 
     const periodLabel = {
         harian: 'Hari Ini',
@@ -210,6 +209,7 @@ const getComparisonTrend = () => {
     // Handle refresh data
     const handleRefresh = () => {
         setIsLoading(true);
+        fetchWeeklyStats();
         setTimeout(() => {
             setIsLoading(false);
         }, 1000);
@@ -220,12 +220,13 @@ const getComparisonTrend = () => {
         labels: yearlySummary.map(item => item.month),
         datasets: [
             {
-                label: 'Penjualan',
+                label: 'Jumlah Penjualan',
                 data: yearlySummary.map(item => item.sales),
                 backgroundColor: 'rgba(99, 102, 241, 0.5)',
                 borderColor: 'rgba(99, 102, 241, 1)',
                 borderWidth: 2,
-                tension: 0.4
+                tension: 0.4,
+                yAxisID: 'y'
             },
             {
                 label: 'Pendapatan (juta)',
@@ -239,13 +240,26 @@ const getComparisonTrend = () => {
         ]
     };
 
+    // Get urgency color for near expired items
+    const getUrgencyColor = (urgency) => {
+        switch (urgency) {
+            case 'critical':
+                return 'bg-red-100 text-red-700 border-red-200';
+            case 'warning':
+                return 'bg-orange-100 text-orange-700 border-orange-200';
+            case 'caution':
+            default:
+                return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+        }
+    };
+
     return (
         <Authenticated auth={auth} header="Dashboard">
             <Head title="Dashboard">
                 <meta name="description" content="Dashboard manajemen apotek" />
             </Head>
 
-            <div className="py-8 px-8 sm:px-8 lg:px-8 space-y-8">
+            <div className="py-8 px-4 sm:px-6 lg:px-8 space-y-8">
                 {/* Header with actions */}
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
@@ -263,6 +277,7 @@ const getComparisonTrend = () => {
                                 isClearable={true}
                                 placeholderText="Filter tanggal"
                                 className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 w-full"
+                                dateFormat="dd/MM/yyyy"
                             />
                             <FiCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                         </div>
@@ -300,31 +315,31 @@ const getComparisonTrend = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                     <StatCard 
                         title="Total Produk" 
-                        value={stats.total_products} 
+                        value={formatNumber(stats.total_products)} 
                         icon={<FiPackage className="w-5 h-5" />} 
-                        trend="up" 
-                        trendValue="5% dari bulan lalu" 
+                        trend="neutral" 
+                        trendValue="Total produk terdaftar" 
                         color="indigo"
                     />
                     <StatCard
                         title="Stok Rendah"
-                        value={stats.low_stock_products}
+                        value={formatNumber(stats.low_stock_products)}
                         icon={<FiAlertTriangle className="w-5 h-5" />}
-                        trend={stats.low_stock_products > 0 ? 'up' : 'down'}
-                        trendValue={stats.low_stock_products > 0 ? `${stats.low_stock_products} perlu restock` : 'Aman'}
+                        trend={stats.low_stock_products > 0 ? 'down' : 'up'}
+                        trendValue={stats.low_stock_products > 0 ? `${stats.low_stock_products} perlu restock` : 'Stok aman'}
                         color="amber"
                     />
                     <StatCard
                         title={`Penjualan ${periodLabel[period]}`}
-                        value={getSalesValue()}
+                        value={formatNumber(getSalesValue())}
                         icon={<FiShoppingCart className="w-5 h-5" />}
-                        trend={getComparisonTrend().trend}
-                        trendValue={getComparisonTrend().value}
+                        trend={getComparisonTrend().salesTrend}
+                        trendValue={getComparisonTrend().salesValue || getComparisonTrend().value}
                         color="emerald"
                     />
                     <StatCard
                         title={`Pendapatan ${periodLabel[period]}`}
-                        value={`Rp ${getRevenueValue().toLocaleString('id-ID')}`}
+                        value={formatCurrency(getRevenueValue())}
                         icon={<FiDollarSign className="w-5 h-5" />}
                         trend={getComparisonTrend().trend}
                         trendValue={getComparisonTrend().value}
@@ -342,7 +357,7 @@ const getComparisonTrend = () => {
                                     {activeChart === 'bar' ? 'Grafik Penjualan 30 Hari Terakhir' : 'Trend Pendapatan Tahunan'}
                                 </h2>
                                 <p className="text-sm text-gray-500 mt-1">
-                                    {activeChart === 'bar' ? 'Total penjualan harian' : 'Perbandingan penjualan dan pendapatan'}
+                                    {activeChart === 'bar' ? 'Total pendapatan harian' : 'Perbandingan penjualan dan pendapatan bulanan'}
                                 </p>
                             </div>
                             <div className="flex gap-2">
@@ -355,7 +370,7 @@ const getComparisonTrend = () => {
                                     }`}
                                 >
                                     <FiBarChart2 className="w-4 h-4" />
-                                    <span>Batang</span>
+                                    <span>Harian</span>
                                 </button>
                                 <button 
                                     onClick={() => setActiveChart('line')}
@@ -366,7 +381,7 @@ const getComparisonTrend = () => {
                                     }`}
                                 >
                                     <FiTrendingUp className="w-4 h-4" />
-                                    <span>Garis</span>
+                                    <span>Tahunan</span>
                                 </button>
                             </div>
                         </div>
@@ -384,7 +399,7 @@ const getComparisonTrend = () => {
                                             tooltip: {
                                                 callbacks: {
                                                     label: function(context) {
-                                                        return `Rp ${context.raw.toLocaleString('id-ID')}`;
+                                                        return `Pendapatan: ${formatCurrency(context.raw)}`;
                                                     }
                                                 }
                                             }
@@ -397,7 +412,7 @@ const getComparisonTrend = () => {
                                                 },
                                                 ticks: {
                                                     callback: function(value) {
-                                                        return `Rp ${value.toLocaleString('id-ID')}`;
+                                                        return formatCurrency(value);
                                                     }
                                                 }
                                             },
@@ -423,9 +438,9 @@ const getComparisonTrend = () => {
                                                 callbacks: {
                                                     label: function(context) {
                                                         if (context.datasetIndex === 0) {
-                                                            return `Penjualan: ${context.raw}`;
+                                                            return `Penjualan: ${formatNumber(context.raw)} transaksi`;
                                                         } else {
-                                                            return `Pendapatan: Rp ${(context.raw * 1000000).toLocaleString('id-ID')}`;
+                                                            return `Pendapatan: ${formatCurrency(context.raw * 1000000)}`;
                                                         }
                                                     }
                                                 }
@@ -484,34 +499,34 @@ const getComparisonTrend = () => {
                                 </Link>
                             </div>
                             
-                            {/* Search */}
-                            <div className="mb-4 relative">
-                                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Cari penjualan..."
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                />
-                            </div>
-                            
                             <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
                                 {filteredRecentSales.length > 0 ? (
-                                    filteredRecentSales.map((sale, index) => (
-                                        <div key={index} className="p-3 rounded-lg hover:bg-gray-50 transition-colors border border-gray-100">
+                                    filteredRecentSales.slice(0, 5).map((sale, index) => (
+                                        <div key={sale.id || index} className="p-3 rounded-lg hover:bg-gray-50 transition-colors border border-gray-100">
                                             <div className="flex justify-between items-center">
                                                 <span className="font-semibold text-gray-700">#{sale.invoice}</span>
                                                 <span className="text-indigo-600 font-semibold">
-                                                    Rp {sale.total.toLocaleString('id-ID')}
+                                                    {formatCurrency(sale.total)}
                                                 </span>
                                             </div>
                                             <div className="text-xs text-gray-500 mt-1 flex items-center flex-wrap gap-x-2">
                                                 <span className="flex items-center">
                                                     <FiUser className="mr-1" />
-                                                    {sale.customer || 'Tanpa nama'}
+                                                    {sale.customer || 'Pelanggan Umum'}
                                                 </span>
-                                                <span>{sale.date}</span>
+                                                <span>•</span>
+                                                <span>{new Date(sale.date).toLocaleDateString('id-ID', {
+                                                    day: '2-digit',
+                                                    month: 'short',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}</span>
+                                                <span>•</span>
+                                                <span>{sale.items_count} item</span>
+                                            </div>
+                                            <div className="text-xs text-gray-400 mt-1">
+                                                Kasir: {sale.cashier}
                                             </div>
                                         </div>
                                     ))
@@ -537,33 +552,33 @@ const getComparisonTrend = () => {
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-semibold text-gray-800">Produk Terlaris</h2>
                                 <span className="text-sm text-emerald-600 font-medium">
-                                    {topProducts.length} produk
+                                    30 hari terakhir
                                 </span>
                             </div>
                             <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
                                 {topProducts.length > 0 ? (
-                                    topProducts.map((product, index) => (
+                                    topProducts.slice(0, 5).map((product, index) => (
                                         <div
-                                            key={index}
+                                            key={product.id}
                                             className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
                                         >
                                             <div className="flex items-center gap-3">
-                                                <div className="bg-emerald-100 p-2 rounded-lg">
-                                                    <FiTrendingUp className="text-emerald-600 w-4 h-4" />
+                                                <div className="bg-emerald-100 p-2 rounded-lg flex-shrink-0">
+                                                    <span className="text-emerald-600 font-bold text-sm">#{index + 1}</span>
                                                 </div>
-                                                <div>
-                                                    <div className="font-medium text-gray-700 text-sm line-clamp-1">{product.name}</div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="font-medium text-gray-700 text-sm truncate">{product.name}</div>
                                                     <div className="text-xs text-gray-500">
                                                         {product.category} • {product.code}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="text-right flex-shrink-0">
                                                 <div className="font-semibold text-emerald-600 text-sm">
-                                                    {product.total_sold} terjual
+                                                    {formatNumber(product.total_sold)} terjual
                                                 </div>
                                                 <div className="text-xs text-gray-500">
-                                                    Rp {product.total_revenue.toLocaleString('id-ID')}
+                                                    {formatCurrency(product.total_revenue)}
                                                 </div>
                                             </div>
                                         </div>
@@ -586,7 +601,7 @@ const getComparisonTrend = () => {
                             <h2 className="text-lg font-semibold text-gray-800">Produk Stok Rendah</h2>
                             <div className="flex items-center gap-2">
                                 <span className="text-sm text-amber-600 font-medium">
-                                    {filteredLowStockItems.length} item
+                                    {stats.low_stock_products} dari {stats.total_products} produk
                                 </span>
                                 <Link 
                                     href={route('products.index', {filter: 'low_stock'})}
@@ -613,35 +628,46 @@ const getComparisonTrend = () => {
                             {filteredLowStockItems.length > 0 ? (
                                 filteredLowStockItems.map((product, index) => (
                                     <Link 
-                                        key={index} 
+                                        key={product.id} 
                                         href={route('products.edit', product.id)}
-                                        className="flex items-center justify-between p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
+                                        className="flex items-center justify-between p-3 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors border border-amber-100"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className="bg-amber-100 p-2 rounded-lg">
-                                                <FiPackage className="text-amber-600 w-4 h-4" />
+                                            <div className="bg-amber-100 p-2 rounded-lg flex-shrink-0">
+                                                <FiAlertTriangle className="text-amber-600 w-4 h-4" />
                                             </div>
-                                            <div>
-                                                <div className="font-medium text-gray-700 text-sm line-clamp-1">{product.name}</div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="font-medium text-gray-700 text-sm truncate">{product.name}</div>
                                                 <div className="text-xs text-gray-500">
                                                     {product.category} • {product.code}
                                                 </div>
+                                                <div className="text-xs text-amber-600 mt-1">
+                                                    {formatCurrency(product.price)}
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="text-right">
+                                        <div className="text-right flex-shrink-0">
                                             <div className="text-amber-800 font-bold text-sm">
-                                                {product.stock} {product.unit}
+                                                {formatNumber(product.stock)} {product.unit}
                                             </div>
-                                            <div className="text-xs text-amber-600">min: {product.min_stock}</div>
+                                            <div className="text-xs text-amber-600">
+                                                min: {formatNumber(product.min_stock)} {product.unit}
+                                            </div>
+                                            <div className="text-xs text-red-600 font-medium mt-1">
+                                                Kurang {formatNumber(product.min_stock - product.stock)} {product.unit}
+                                            </div>
                                         </div>
                                     </Link>
                                 ))
                             ) : (
                                 <div className="text-center py-8">
+                                    <div className="flex items-center justify-center mb-3">
+                                        <FiCheckCircle className="text-emerald-500 w-8 h-8" />
+                                    </div>
                                     <div className="text-gray-400 mb-2">
                                         {lowStockItems.length === 0 ? 'Tidak ada produk stok rendah' : 'Tidak ditemukan produk'}
                                     </div>
-                                    <div className="text-sm text-emerald-600">Stok aman</div>
+                                    <div className="text-sm text-emerald-600 font-medium">Semua stok aman!</div>
                                 </div>
                             )}
                         </div>
@@ -653,7 +679,7 @@ const getComparisonTrend = () => {
                             <h2 className="text-lg font-semibold text-gray-800">Produk Hampir Kadaluwarsa</h2>
                             <div className="flex items-center gap-2">
                                 <span className="text-sm text-red-600 font-medium">
-                                    {filteredNearExpiredItems.length} item
+                                    {stats.near_expired_products} dalam 30 hari
                                 </span>
                                 <Link 
                                     href={route('products.index', {filter: 'near_expired'})}
@@ -680,37 +706,53 @@ const getComparisonTrend = () => {
                             {filteredNearExpiredItems.length > 0 ? (
                                 filteredNearExpiredItems.map((product, index) => (
                                     <Link
-                                        key={index}
+                                        key={product.id}
                                         href={route('products.edit', product.id)}
-                                        className="flex items-center justify-between p-3 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                                        className={`flex items-center justify-between p-3 rounded-lg hover:opacity-90 transition-all border ${getUrgencyColor(product.urgency)}`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className="bg-red-100 p-2 rounded-lg">
-                                                <FiClock className="text-red-600 w-4 h-4" />
+                                            <div className={`p-2 rounded-lg flex-shrink-0 ${
+                                                product.urgency === 'critical' ? 'bg-red-200' :
+                                                product.urgency === 'warning' ? 'bg-orange-200' : 'bg-yellow-200'
+                                            }`}>
+                                                {product.urgency === 'critical' ? (
+                                                    <FiAlertCircle className="text-red-700 w-4 h-4" />
+                                                ) : (
+                                                    <FiClock className="text-orange-700 w-4 h-4" />
+                                                )}
                                             </div>
-                                            <div>
-                                                <div className="font-medium text-gray-700 text-sm line-clamp-1">{product.name}</div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="font-medium text-gray-700 text-sm truncate">{product.name}</div>
                                                 <div className="text-xs text-gray-500">
                                                     {product.category} • {product.code}
                                                 </div>
+                                                <div className={`text-xs font-medium mt-1 ${
+                                                    product.urgency === 'critical' ? 'text-red-700' :
+                                                    product.urgency === 'warning' ? 'text-orange-700' : 'text-yellow-700'
+                                                }`}>
+                                                    {product.days_until_expiry} hari lagi
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-red-700 text-sm font-semibold">
+                                        <div className="text-right flex-shrink-0">
+                                            <div className="text-gray-700 text-sm font-semibold">
                                                 Exp: {product.expired_date}
                                             </div>
                                             <div className="text-xs text-gray-500">
-                                                {product.stock} {product.unit} tersisa
+                                                {formatNumber(product.stock)} {product.unit} tersisa
                                             </div>
                                         </div>
                                     </Link>
                                 ))
                             ) : (
                                 <div className="text-center py-8">
+                                    <div className="flex items-center justify-center mb-3">
+                                        <FiCheckCircle className="text-emerald-500 w-8 h-8" />
+                                    </div>
                                     <div className="text-gray-400 mb-2">
                                         {nearExpiredItems.length === 0 ? 'Tidak ada produk hampir kadaluwarsa' : 'Tidak ditemukan produk'}
                                     </div>
-                                    <div className="text-sm text-emerald-600">Semua produk aman</div>
+                                    <div className="text-sm text-emerald-600 font-medium">Semua produk masih aman!</div>
                                 </div>
                             )}
                         </div>
@@ -727,26 +769,31 @@ function StatCard({ title, value, icon, trend, trendValue, color = 'indigo' }) {
             bg: 'bg-indigo-50',
             text: 'text-indigo-600',
             iconBg: 'bg-indigo-100',
+            border: 'border-indigo-100 hover:border-indigo-200',
         },
         emerald: {
             bg: 'bg-emerald-50',
             text: 'text-emerald-600',
             iconBg: 'bg-emerald-100',
+            border: 'border-emerald-100 hover:border-emerald-200',
         },
         amber: {
             bg: 'bg-amber-50',
             text: 'text-amber-600',
             iconBg: 'bg-amber-100',
+            border: 'border-amber-100 hover:border-amber-200',
         },
         red: {
             bg: 'bg-red-50',
             text: 'text-red-600',
             iconBg: 'bg-red-100',
+            border: 'border-red-100 hover:border-red-200',
         },
         violet: {
             bg: 'bg-violet-50',
             text: 'text-violet-600',
             iconBg: 'bg-violet-100',
+            border: 'border-violet-100 hover:border-violet-200',
         },
     };
 
@@ -761,22 +808,31 @@ function StatCard({ title, value, icon, trend, trendValue, color = 'indigo' }) {
             bg: 'bg-red-100',
             icon: <FiTrendingDown className="w-4 h-4" />
         },
+        neutral: {
+            text: 'text-gray-600',
+            bg: 'bg-gray-100',
+            icon: <FiPackage className="w-4 h-4" />
+        },
     };
 
+    const currentTrend = trendColors[trend] || trendColors.neutral;
+
     return (
-        <div className={`${colorClasses[color].bg} rounded-xl p-5 hover:shadow-md transition-all cursor-default border border-transparent hover:border-${color}-200`}>
+        <div className={`${colorClasses[color].bg} rounded-xl p-5 hover:shadow-md transition-all cursor-default border ${colorClasses[color].border}`}>
             <div className="flex items-center justify-between">
-                <div>
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{title}</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+                <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{title}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1 truncate" title={value}>{value}</p>
                 </div>
-                <div className={`${colorClasses[color].iconBg} rounded-lg p-3`}>
-                    {icon}
+                <div className={`${colorClasses[color].iconBg} rounded-lg p-3 flex-shrink-0`}>
+                    <div className={colorClasses[color].text}>
+                        {icon}
+                    </div>
                 </div>
             </div>
-            <div className={`mt-3 flex items-center text-sm ${trendColors[trend].text}`}>
-                <span className="mr-1">{trendColors[trend].icon}</span>
-                {trendValue}
+            <div className={`mt-3 flex items-center text-sm ${currentTrend.text}`}>
+                <span className="mr-1 flex-shrink-0">{currentTrend.icon}</span>
+                <span className="truncate" title={trendValue}>{trendValue}</span>
             </div>
         </div>
     );

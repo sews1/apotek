@@ -95,8 +95,8 @@ export default function SupplierIndex({ auth, suppliers }) {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm text-gray-900">
-                                                    {supplier.items && supplier.items.length > 0
-                                                        ? `${supplier.items.length} item(s)`
+                                                    {supplier.item && supplier.item.length > 0
+                                                        ? `${supplier.item.length} item(s)`
                                                         : '-'}
                                                 </div>
                                             </td>

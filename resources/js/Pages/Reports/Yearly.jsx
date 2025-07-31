@@ -1,84 +1,91 @@
 import React from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import Authenticated from '@/Layouts/Authenticated';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-export default function YearlyReport({ auth, yearlySales = [], year }) {
-    const safeYearlySales = Array.isArray(yearlySales) ? yearlySales : [];
 
-    // Format month names in Indonesian
+export default function YearlyReport({ auth, yearlySales = [], year, availableYears = [] }) {
+    const safeYearlySales = Array.isArray(yearlySales) ? yearlySales : [];
+    const safeAvailableYears = Array.isArray(availableYears) ? availableYears : [];
+
     const monthNames = [
         'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
         'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ];
 
-    // Process data
-    const combinedData = safeYearlySales.flatMap(monthData =>
-        (monthData.sales || []).flatMap(sale => {
-            const saleDate = new Date(sale.date);
-            const formattedDate = saleDate.toLocaleDateString('id-ID', {
-                day: 'numeric',
-                month: 'short'
-            });
+    const combinedData = safeYearlySales.map(sale => {
+        const saleDate = new Date(sale.date);
+        const month = saleDate.getMonth() + 1;
+        const formattedDate = saleDate.toLocaleDateString('id-ID', {
+            day: 'numeric',
+            month: 'short'
+        });
 
-            if (Array.isArray(sale.items) && sale.items.length > 0) {
-                return sale.items.map(item => ({
-                    month: monthNames[monthData.month - 1] || `Bulan ${monthData.month}`,
-                    date: formattedDate,
-                    invoice_number: sale.invoice_number,
-                    product_name: item.product_name,
-                    quantity: item.quantity,
-                    price: item.price,
-                    subtotal: item.subtotal,
-                    sale_total: sale.total
-                }));
-            }
-            return [{
-                month: monthNames[monthData.month - 1] || `Bulan ${monthData.month}`,
+        if (Array.isArray(sale.items) && sale.items.length > 0) {
+            return sale.items.map(item => ({
+                month: monthNames[month - 1] || `Bulan ${month}`,
                 date: formattedDate,
-                invoice_number: sale.invoice_number,
-                product_name: '-',
-                quantity: 0,
-                price: 0,
-                subtotal: 0,
+                invoice_number: sale.invoice,
+                product_name: item.product_name,
+                quantity: item.quantity,
+                price: item.price,
+                subtotal: item.subtotal,
                 sale_total: sale.total
-            }];
-        })
+            }));
+        }
+        return [{
+            month: monthNames[month - 1] || `Bulan ${month}`,
+            date: formattedDate,
+            invoice_number: sale.invoice,
+            product_name: '-',
+            quantity: 0,
+            price: 0,
+            subtotal: 0,
+            sale_total: sale.total
+        }];
+    }).flat();
+
+    const totalSales = safeYearlySales.reduce((sum, sale) => sum + sale.total, 0);
+    const totalTransactions = safeYearlySales.length;
+    const totalItemsSold = safeYearlySales.reduce(
+        (sum, sale) => sum + (sale.items?.reduce((itemSum, item) => itemSum + item.quantity, 0) || 0),
+        0
     );
 
-    // Calculate statistics
-    const totalSales = safeYearlySales.reduce((sum, monthData) =>
-        sum + (monthData.sales || []).reduce((monthSum, sale) => monthSum + sale.total, 0), 0);
+    const monthlySummary = safeYearlySales.reduce((acc, sale) => {
+        const saleDate = new Date(sale.date);
+        const month = saleDate.getMonth();
+        const monthName = monthNames[month] || `Bulan ${month + 1}`;
+        
+        if (!acc[month]) {
+            acc[month] = {
+                month: monthName,
+                total: 0,
+                transactions: 0,
+                items: 0
+            };
+        }
+        
+        acc[month].total += sale.total;
+        acc[month].transactions += 1;
+        acc[month].items += sale.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+        
+        return acc;
+    }, {});
 
-    const totalTransactions = safeYearlySales.reduce((sum, monthData) =>
-        sum + (monthData.sales || []).length, 0);
+    const monthlySummaryArray = Object.values(monthlySummary);
+    const avgMonthlySales = (totalSales / (monthlySummaryArray.length || 1)).toFixed(2);
+    const avgMonthlyTransactions = (totalTransactions / (monthlySummaryArray.length || 1)).toFixed(2);
 
-    const totalItemsSold = safeYearlySales.reduce((sum, monthData) =>
-        sum + (monthData.sales || []).reduce((monthSum, sale) => monthSum + (sale.items?.length || 0), 0), 0);
-
-    const avgMonthlySales = (totalSales / (safeYearlySales.length || 1)).toFixed(2);
-    const avgMonthlyTransactions = (totalTransactions / (safeYearlySales.length || 1)).toFixed(2);
-
-    const uniqueProducts = new Set();
-    safeYearlySales.forEach(monthData =>
-        (monthData.sales || []).forEach(sale =>
-            (sale.items || []).forEach(item =>
-                uniqueProducts.add(item.product_id)
-            )
+    const uniqueProducts = new Set(
+        safeYearlySales.flatMap(sale => 
+            sale.items?.map(item => item.product_id) || []
         )
     );
 
-    const monthlySummary = safeYearlySales.map(monthData => ({
-        month: monthNames[monthData.month - 1] || `Bulan ${monthData.month}`,
-        total: (monthData.sales || []).reduce((sum, sale) => sum + sale.total, 0),
-        transactions: (monthData.sales || []).length,
-        items: (monthData.sales || []).reduce((sum, sale) => sum + (sale.items?.length || 0), 0)
-    }));
-
-    // Export functions
     const exportExcel = () => {
         const wsData = combinedData.map(item => ({
             Bulan: item.month,
@@ -91,7 +98,7 @@ export default function YearlyReport({ auth, yearlySales = [], year }) {
             'Total Transaksi': item.sale_total
         }));
 
-        const monthlyData = monthlySummary.map(month => ({
+        const monthlyData = monthlySummaryArray.map(month => ({
             Bulan: month.month,
             'Total Penjualan': month.total,
             'Jumlah Transaksi': month.transactions,
@@ -126,7 +133,6 @@ export default function YearlyReport({ auth, yearlySales = [], year }) {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
 
-        // Title and summary
         doc.setFontSize(16);
         doc.text(`Laporan Penjualan Tahun ${year}`, pageWidth / 2, 15, { align: 'center' });
 
@@ -136,31 +142,22 @@ export default function YearlyReport({ auth, yearlySales = [], year }) {
         doc.text(`Rata-rata per Bulan: Rp ${avgMonthlySales.toLocaleString('id-ID')}`, 14, 35);
         doc.text(`Item Terjual: ${totalItemsSold} (${uniqueProducts.size} produk berbeda)`, 14, 40);
 
-        // Monthly summary
         doc.addPage();
         doc.setFontSize(12);
         doc.text('Ringkasan Bulanan', 14, 15);
         autoTable(doc, {
             startY: 20,
             head: [['Bulan', 'Total Penjualan', 'Transaksi', 'Item Terjual', 'Persentase']],
-            body: monthlySummary.map(month => [
+            body: monthlySummaryArray.map(month => [
                 month.month,
                 `Rp ${month.total.toLocaleString('id-ID')}`,
                 month.transactions,
                 month.items,
                 totalSales > 0 ? `${((month.total / totalSales) * 100).toFixed(2)}%` : '0.00%'
             ]),
-            styles: { fontSize: 8 },
-            columnStyles: {
-                0: { cellWidth: 30 },
-                1: { cellWidth: 30 },
-                2: { cellWidth: 20 },
-                3: { cellWidth: 20 },
-                4: { cellWidth: 20 }
-            }
+            styles: { fontSize: 8 }
         });
 
-        // Transaction details (limited to 1000)
         const limitedData = combinedData.slice(0, 1000);
         if (limitedData.length > 0) {
             doc.addPage();
@@ -178,16 +175,7 @@ export default function YearlyReport({ auth, yearlySales = [], year }) {
                     `Rp ${item.price.toLocaleString('id-ID')}`,
                     `Rp ${item.subtotal.toLocaleString('id-ID')}`
                 ]),
-                styles: { fontSize: 6 },
-                columnStyles: {
-                    0: { cellWidth: 20 },
-                    1: { cellWidth: 15 },
-                    2: { cellWidth: 25 },
-                    3: { cellWidth: 40 },
-                    4: { cellWidth: 10 },
-                    5: { cellWidth: 20 },
-                    6: { cellWidth: 20 }
-                }
+                styles: { fontSize: 6 }
             });
         }
 
@@ -199,12 +187,44 @@ export default function YearlyReport({ auth, yearlySales = [], year }) {
             <Head title={`Laporan Tahunan ${year}`} />
 
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
-                {/* Header Section */}
+                {/* Header with Dropdown */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-800">Laporan Tahunan</h2>
-                        <p className="text-gray-600">Tahun {year}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                            <label htmlFor="year" className="text-sm text-gray-700">Pilih Tahun:</label>
+                            <select
+                                id="year"
+                                value={year}
+                                onChange={(e) => {
+                                    const selectedYear = e.target.value;
+                                    window.location.href = route('reports.yearly', { year: selectedYear });
+                                }}
+                                className="border border-gray-300 rounded-md px-4 py-2 text-sm text-gray-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="" disabled>
+                                    {year ? `Tahun: ${year}` : 'Pilih Tahun'}
+                                </option>
+                                {/* Tampilkan tahun-tahun dari availableYears, dan juga tahun-tahun sebelumnya hingga 10 tahun ke belakang */}
+                                {(() => {
+                                    // Gabungkan availableYears dan 10 tahun ke belakang dari tahun sekarang
+                                    const now = new Date().getFullYear();
+                                    const yearsSet = new Set([
+                                        ...safeAvailableYears,
+                                        ...Array.from({ length: 10 }, (_, i) => (now - i).toString())
+                                    ]);
+                                    // Urutkan menurun
+                                    const years = Array.from(yearsSet).sort((a, b) => b - a);
+                                    return years.map((availableYear) => (
+                                        <option key={availableYear} value={availableYear}>
+                                            {availableYear}
+                                        </option>
+                                    ));
+                                })()}
+                            </select>
+                        </div>
                     </div>
+
                     <div className="flex gap-2">
                         <button 
                             onClick={exportExcel} 
@@ -288,7 +308,7 @@ export default function YearlyReport({ auth, yearlySales = [], year }) {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {monthlySummary.map((month, index) => (
+                        {monthlySummaryArray.map((month, index) => (
                             <tr key={index} className="hover:bg-gray-50">
                                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{month.month}</td>
                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">
@@ -373,7 +393,7 @@ export default function YearlyReport({ auth, yearlySales = [], year }) {
     );
 }
 
-// StatBox Component
+// StatBox and SectionTable components remain the same...
 function StatBox({ title, value, icon, trend, trendText, color }) {
     const colorClasses = {
         blue: {
@@ -435,7 +455,6 @@ function StatBox({ title, value, icon, trend, trendText, color }) {
     );
 }
 
-// SectionTable Component
 function SectionTable({ title, description, children }) {
     return (
         <div className="mb-8">

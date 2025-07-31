@@ -40,72 +40,70 @@ class SaleController extends Controller
             'products' => $products,
         ]);
     }
+public function store(Request $request)
+{
+    return DB::transaction(function () use ($request) {
+        $validated = $request->validate([
+            'customer_name' => 'nullable|string|max:255',
+            'payment_method' => 'required|in:cash,debit,credit',
+            'payment_amount' => 'required|numeric|min:0',
+            'payment_date' => 'nullable|date',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.price' => 'required|numeric|min:0',
+            'notes' => 'nullable|string',
+        ]);
 
-    public function store(Request $request)
-    {
-        return DB::transaction(function () use ($request) {
-            $validated = $request->validate([
-                'customer_name' => 'nullable|string|max:255',
-                'customer_phone' => 'nullable|string|max:20',
-                'payment_method' => 'required|in:cash,debit,credit',
-                'payment_amount' => 'required|numeric|min:0',
-                'items' => 'required|array|min:1',
-                'items.*.product_id' => 'required|exists:products,id',
-                'items.*.quantity' => 'required|integer|min:1',
-                'items.*.price' => 'required|numeric|min:0',
-                'notes' => 'nullable|string',
+        $total = collect($validated['items'])->sum(fn($item) =>
+            $item['price'] * $item['quantity']
+        );
+
+        if ($validated['payment_amount'] < $total) {
+            abort(422, 'Jumlah pembayaran kurang dari total belanja.');
+        }
+
+        // Buat invoice unik
+        for ($i = 0; $i < 5; $i++) {
+            $invoice = Sale::generateInvoiceNumber();
+            if (!Sale::where('invoice_number', $invoice)->exists()) {
+                break;
+            }
+            usleep(100000);
+        }
+
+        if (Sale::where('invoice_number', $invoice)->exists()) {
+            abort(500, 'Gagal membuat nomor invoice unik. Silakan coba lagi.');
+        }
+
+        $sale = Sale::create([
+            'invoice_number' => $invoice,
+            'user_id' => auth()->id(),
+            'customer_name' => $validated['customer_name'] ?? null,
+            'total' => $total,
+            'payment_amount' => $validated['payment_amount'],
+            'change_amount' => $validated['payment_amount'] - $total,
+            'payment_method' => $validated['payment_method'],
+            'payment_date' => $validated['payment_date'] ?? now(), // ✅ perbaikan di sini
+            'status' => 'completed',
+        ]);
+
+        foreach ($validated['items'] as $item) {
+            $sale->items()->create([
+                'product_id' => $item['product_id'],
+                'quantity' => $item['quantity'],
+                'price' => $item['price'],
+                'subtotal' => $item['price'] * $item['quantity'],
             ]);
 
-            $total = collect($validated['items'])->sum(function ($item) {
-                return $item['price'] * $item['quantity'];
-            });
+            Product::where('id', $item['product_id'])->decrement('stock', $item['quantity']);
+        }
 
-            if ($validated['payment_amount'] < $total) {
-                abort(422, 'Jumlah pembayaran kurang dari total belanja.');
-            }
+        return redirect()->route('sales.show', $sale->id)
+            ->with('success', 'Transaksi berhasil disimpan!');
+    });
+}
 
-            // Retry untuk menangani kemungkinan duplikat invoice_number
-            $invoice = null;
-            for ($i = 0; $i < 5; $i++) {
-                $invoice = Sale::generateInvoiceNumber();
-                if (!Sale::where('invoice_number', $invoice)->exists()) {
-                    break;
-                }
-                usleep(100000); // delay 100ms
-            }
-
-            if (Sale::where('invoice_number', $invoice)->exists()) {
-                abort(500, 'Gagal membuat nomor invoice unik. Silakan coba lagi.');
-            }
-
-            $sale = Sale::create([
-                'invoice_number' => $invoice,
-                'user_id' => auth()->id(),
-                'customer_name' => $validated['customer_name'] ?? null,
-                'customer_phone' => $validated['customer_phone'] ?? null,
-                'total' => $total,
-                'payment_amount' => $validated['payment_amount'],
-                'change_amount' => $validated['payment_amount'] - $total,
-                'payment_method' => $validated['payment_method'],
-                'status' => 'completed',
-                'notes' => $validated['notes'] ?? null,
-            ]);
-
-            foreach ($validated['items'] as $item) {
-                $sale->items()->create([
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity'],
-                    'price' => $item['price'],
-                    'subtotal' => $item['price'] * $item['quantity'],
-                ]);
-
-                Product::where('id', $item['product_id'])->decrement('stock', $item['quantity']);
-            }
-
-            return redirect()->route('sales.show', $sale->id)
-                ->with('success', 'Transaksi berhasil disimpan!');
-        });
-    }
 
     public function show(Sale $sale)
     {

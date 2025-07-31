@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import Authenticated from '@/Layouts/Authenticated';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-export default function MonthlyReport({ auth, monthlySales, month: initialMonth, year: initialYear }) {
+export default function MonthlyReport({ 
+    auth, 
+    monthlySales, 
+    month: initialMonth, 
+    year: initialYear,
+    availablePeriods = [],
+    monthName 
+}) {
     const [selectedMonth, setSelectedMonth] = useState(initialMonth || new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState(initialYear || new Date().getFullYear());
-    const [filteredSales, setFilteredSales] = useState(monthlySales || []);
     const [isLoading, setIsLoading] = useState(false);
 
     // Month names in Indonesian
@@ -25,32 +31,54 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
         (_, i) => currentYear - 5 + i
     );
 
-    // Filter sales data based on selected month and year
-    useEffect(() => {
-        if (monthlySales) {
-            const filtered = monthlySales.filter(sale => {
-                const saleDate = new Date(sale.date);
-                return saleDate.getMonth() + 1 === parseInt(selectedMonth) && 
-                       saleDate.getFullYear() === parseInt(selectedYear);
+    // PERBAIKAN UTAMA: Function untuk fetch data dari server
+    const fetchMonthlyData = async (month, year) => {
+        setIsLoading(true);
+        try {
+            // Gunakan Inertia router untuk navigate dengan parameter
+            router.get(route('reports.monthly'), {
+                month: month,
+                year: year
+            }, {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsLoading(false);
+                },
+                onError: (error) => {
+                    console.error('Error fetching monthly data:', error);
+                    setIsLoading(false);
+                }
             });
-            setFilteredSales(filtered);
+        } catch (error) {
+            console.error('Error:', error);
+            setIsLoading(false);
         }
-    }, [selectedMonth, selectedYear, monthlySales]);
+    };
 
-    // Initialize daily data
+    // Handle period change
+    const handlePeriodChange = () => {
+        if (selectedMonth !== initialMonth || selectedYear !== initialYear) {
+            fetchMonthlyData(selectedMonth, selectedYear);
+        }
+    };
+
+    // Process sales data
+    const processedSales = monthlySales || [];
+
     const dailySales = {};
     const dailyTransactions = {};
-    
-    filteredSales.forEach(sale => {
+
+    processedSales.forEach(sale => {
         const day = new Date(sale.date).getDate();
         dailySales[day] = (dailySales[day] || 0) + sale.total;
         dailyTransactions[day] = (dailyTransactions[day] || 0) + 1;
     });
 
     // Calculate main statistics
-    const totalSales = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalTransactions = filteredSales.length;
-    const totalItemsSold = filteredSales.reduce((sum, sale) => sum + (sale.items?.length || 0), 0);
+    const totalSales = processedSales.reduce((sum, sale) => sum + sale.total, 0);
+    const totalTransactions = processedSales.length;
+    const totalItemsSold = processedSales.reduce((sum, sale) => sum + (sale.items?.length || 0), 0);
     const avgDailySales = Object.keys(dailySales).length > 0 ? 
         (totalSales / Object.keys(dailySales).length).toFixed(2) : 0;
     const avgDailyTransactions = Object.keys(dailySales).length > 0 ? 
@@ -58,11 +86,11 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
     
     // Get unique products
     const uniqueProducts = new Set();
-    filteredSales.forEach(sale => sale.items?.forEach(item => uniqueProducts.add(item.product_id)));
+    processedSales.forEach(sale => sale.items?.forEach(item => uniqueProducts.add(item.product_id)));
 
     // Get top selling products
     const productSales = {};
-    filteredSales.forEach(sale => {
+    processedSales.forEach(sale => {
         sale.items?.forEach(item => {
             if (!productSales[item.product_name]) {
                 productSales[item.product_name] = {
@@ -81,7 +109,7 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
         .slice(0, 10);
 
     // Combine transaction data
-    const combinedData = filteredSales.flatMap(sale => {
+    const combinedData = processedSales.flatMap(sale => {
         if (sale.items?.length > 0) {
             return sale.items.map(item => ({
                 date: sale.date,
@@ -112,14 +140,43 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
         return new Date(dateString).toLocaleDateString('id-ID', options);
     };
 
-    // Handle month/year change
-    const handlePeriodChange = async () => {
-        setIsLoading(true);
-        // Here you would typically make an API call to fetch data for the selected period
-        // For now, we'll just simulate loading
-        setTimeout(() => {
-            setIsLoading(false);
-        }, 500);
+    // Quick navigation functions
+    const goToPreviousMonth = () => {
+        let newMonth = selectedMonth - 1;
+        let newYear = selectedYear;
+        
+        if (newMonth < 1) {
+            newMonth = 12;
+            newYear -= 1;
+        }
+        
+        setSelectedMonth(newMonth);
+        setSelectedYear(newYear);
+        fetchMonthlyData(newMonth, newYear);
+    };
+
+    const goToNextMonth = () => {
+        let newMonth = selectedMonth + 1;
+        let newYear = selectedYear;
+        
+        if (newMonth > 12) {
+            newMonth = 1;
+            newYear += 1;
+        }
+        
+        setSelectedMonth(newMonth);
+        setSelectedYear(newYear);
+        fetchMonthlyData(newMonth, newYear);
+    };
+
+    const goToCurrentMonth = () => {
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        
+        setSelectedMonth(currentMonth);
+        setSelectedYear(currentYear);
+        fetchMonthlyData(currentMonth, currentYear);
     };
 
     // ===== EXPORT EXCEL =====
@@ -232,7 +289,7 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
         const statsTable = [
             ['Total Penjualan', `Rp ${totalSales.toLocaleString('id-ID')}`],
             ['Total Transaksi', totalTransactions.toString()],
-            ['Total Item Terjual', totalItemsSold.toString()]
+            ['Total Item Terjual', totalItemsSold.toString()],
             ['Rata-rata Penjualan Harian', `Rp ${parseFloat(avgDailySales).toLocaleString('id-ID')}`],
             ['Rata-rata Transaksi Harian', avgDailyTransactions]
         ];
@@ -350,13 +407,49 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
                 {/* Period Selector */}
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
                     <h3 className="text-lg font-semibold text-gray-800 mb-3">Pilih Periode Laporan</h3>
+                    
+                    {/* Quick Navigation */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        <button 
+                            onClick={goToPreviousMonth}
+                            disabled={isLoading}
+                            className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 flex items-center gap-1 text-sm"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                            Bulan Sebelumnya
+                        </button>
+                        
+                        <button 
+                            onClick={goToCurrentMonth}
+                            disabled={isLoading}
+                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50 text-sm"
+                        >
+                            Bulan Ini
+                        </button>
+                        
+                        <button 
+                            onClick={goToNextMonth}
+                            disabled={isLoading}
+                            className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 flex items-center gap-1 text-sm"
+                        >
+                            Bulan Selanjutnya
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Manual Selection */}
                     <div className="flex flex-wrap gap-4 items-end">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Bulan</label>
                             <select 
                                 value={selectedMonth} 
                                 onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                disabled={isLoading}
+                                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
                             >
                                 {monthNames.map((month, index) => (
                                     <option key={index + 1} value={index + 1}>
@@ -371,7 +464,8 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
                             <select 
                                 value={selectedYear} 
                                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                disabled={isLoading}
+                                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
                             >
                                 {yearOptions.map(year => (
                                     <option key={year} value={year}>
@@ -383,7 +477,7 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
                         
                         <button 
                             onClick={handlePeriodChange}
-                            disabled={isLoading}
+                            disabled={isLoading || (selectedMonth === initialMonth && selectedYear === initialYear)}
                             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                         >
                             {isLoading ? (
@@ -401,6 +495,8 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
                             )}
                         </button>
                     </div>
+
+
                 </div>
 
                 {/* Header & Actions */}
@@ -408,14 +504,14 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
                     <div>
                         <h2 className="text-2xl font-bold text-gray-800">Laporan Penjualan</h2>
                         <p className="text-gray-600">{monthNames[selectedMonth - 1]} {selectedYear}</p>
-                        {filteredSales.length === 0 && (
+                        {processedSales.length === 0 && !isLoading && (
                             <p className="text-amber-600 text-sm mt-1">⚠️ Tidak ada data penjualan untuk periode ini</p>
                         )}
                     </div>
                     <div className="flex gap-2">
                         <button 
                             onClick={exportExcel} 
-                            disabled={filteredSales.length === 0}
+                            disabled={processedSales.length === 0 || isLoading}
                             className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2 transition-colors"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -425,7 +521,7 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
                         </button>
                         <button 
                             onClick={exportPDF} 
-                            disabled={filteredSales.length === 0}
+                            disabled={processedSales.length === 0 || isLoading}
                             className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-2 transition-colors"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -436,44 +532,64 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
                     </div>
                 </div>
 
+                {/* Loading State */}
+                {isLoading && (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Memuat data laporan...</p>
+                    </div>
+                )}
+
                 {/* Statistics Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <StatBox 
-                        title="Total Penjualan" 
-                        value={`Rp ${totalSales.toLocaleString('id-ID')}`} 
-                        icon={
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        }
-                        trendText={`Rp ${parseFloat(avgDailySales).toLocaleString('id-ID')}/hari`}
-                        color="blue"
-                    />
-                    <StatBox 
-                        title="Total Transaksi" 
-                        value={totalTransactions} 
-                        icon={
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                        }
-                        trendText={`${avgDailyTransactions}/hari`}
-                        color="green"
-                    />
-                    <StatBox 
-                        title="Item Terjual" 
-                        value={totalItemsSold} 
-                        icon={
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                            </svg>
-                        }
-                        color="purple"
-                    />
-                </div>
+                {!isLoading && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        <StatBox 
+                            title="Total Penjualan" 
+                            value={`Rp ${totalSales.toLocaleString('id-ID')}`} 
+                            icon={
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            }
+                            trendText={`Rp ${parseFloat(avgDailySales).toLocaleString('id-ID')}/hari`}
+                            color="blue"
+                        />
+                        <StatBox 
+                            title="Total Transaksi" 
+                            value={totalTransactions} 
+                            icon={
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                            }
+                            trendText={`${avgDailyTransactions}/hari`}
+                            color="green"
+                        />
+                        <StatBox 
+                            title="Item Terjual" 
+                            value={totalItemsSold} 
+                            icon={
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                            }
+                            color="purple"
+                        />
+                        <StatBox 
+                            title="Produk Unik" 
+                            value={uniqueProducts.size} 
+                            icon={
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                            }
+                            color="amber"
+                        />
+                    </div>
+                )}
 
                 {/* Content based on data availability */}
-                {filteredSales.length === 0 ? (
+                {!isLoading && processedSales.length === 0 ? (
                     <div className="text-center py-12">
                         <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -482,8 +598,11 @@ export default function MonthlyReport({ auth, monthlySales, month: initialMonth,
                         <p className="mt-2 text-gray-500">
                             Tidak ada transaksi penjualan untuk periode {monthNames[selectedMonth - 1]} {selectedYear}.
                         </p>
+                        <p className="text-sm text-gray-400 mt-1">
+                            Coba pilih periode lain atau periksa kembali data penjualan Anda.
+                        </p>
                     </div>
-                ) : (
+                ) : !isLoading && (
                     <>
                         {/* Top Products */}
                         {topProducts.length > 0 && (

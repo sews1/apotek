@@ -29,10 +29,10 @@ class SupplierController extends Controller
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string',
-            'items' => 'nullable|string',
+            'item' => 'nullable|string',
         ]);
 
-        Supplier::create($request->only('name', 'phone', 'address', 'items'));
+        Supplier::create($request->only('name', 'phone', 'address', 'item'));
 
         return redirect()->route('suppliers.index')
             ->with('success', 'Supplier berhasil ditambahkan.');
@@ -51,10 +51,10 @@ class SupplierController extends Controller
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string',
-            'items' => 'nullable|string',
+            'item' => 'nullable|string',
         ]);
 
-        $supplier->update($request->only('name', 'phone', 'address', 'items'));
+        $supplier->update($request->only('name', 'phone', 'address', 'item'));
 
         return redirect()->route('suppliers.index')
             ->with('success', 'Supplier berhasil diperbarui.');

@@ -6,8 +6,9 @@ import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-export default function ProductReport({ auth, products = [], categories = [] }) {
-  if (!products || !categories) {
+// Ubah props sesuai data dari controller
+export default function ProductReport({ auth, productSales = [], categories = [], summary = {}, filters = {} }) {
+  if (!productSales || !categories) {
     return (
       <Authenticated auth={auth} header="Laporan Produk">
         <Head title="Laporan Produk" />
@@ -18,58 +19,45 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
     );
   }
 
-  const totalProducts = products.length;
-  const totalCategories = categories.length;
-  const totalStock = products.reduce((sum, product) => sum + (product.stock || 0), 0);
-  const totalValue = products.reduce(
-    (sum, product) => sum + (product.price || 0) * (product.stock || 0),
-    0
-  );
+  // Data summary dari backend
+  const totalProducts = summary.total_products || 0;
+  const totalStockValue = summary.total_stock_value || 0;
+  const totalQuantitySold = summary.total_quantity_sold || 0;
+  const totalRevenue = summary.total_revenue || 0;
 
-  const lowStockProducts = products.filter((product) => (product.stock || 0) < 10);
+  // Produk stok rendah (<10)
+  const lowStockProducts = productSales.filter((product) => (product.current_stock || 0) < 10);
 
-  const bestSellingProducts = [...products]
-    .sort((a, b) => (b.sold_quantity || 0) - (a.sold_quantity || 0))
+  // 10 produk terlaris
+  const bestSellingProducts = [...productSales]
+    .sort((a, b) => (b.total_quantity_sold || 0) - (a.total_quantity_sold || 0))
     .slice(0, 10);
 
-  const sortedByPrice = [...products].sort((a, b) => (b.price || 0) - (a.price || 0));
-  const mostExpensiveProduct = sortedByPrice[0];
-  const cheapestProduct = sortedByPrice[sortedByPrice.length - 1];
-
+  // Ringkasan per kategori
   const productsByCategory = categories.map((category) => {
-    const categoryProducts = products.filter((product) => product.category_id === category.id);
-    const categoryStock = categoryProducts.reduce((sum, product) => sum + (product.stock || 0), 0);
-    const categoryValue = categoryProducts.reduce(
-      (sum, product) => sum + (product.price || 0) * (product.stock || 0),
-      0
-    );
-
+    const categoryProducts = productSales.filter((product) => product.category_id === category.id);
     return {
       category_id: category.id,
       category_name: category.name || 'Tidak Diketahui',
       product_count: categoryProducts.length,
-      stock: categoryStock,
-      total_value: categoryValue,
-      percentage:
-        totalProducts > 0
-          ? (categoryProducts.length / totalProducts * 100).toFixed(2) + '%'
-          : '0%',
+      stock: categoryProducts.reduce((sum, p) => sum + (p.current_stock || 0), 0),
+      total_value: categoryProducts.reduce((sum, p) => sum + (p.current_stock || 0) * (p.purchase_price || 0), 0),
+      percentage: totalProducts > 0 ? ((categoryProducts.length / totalProducts) * 100).toFixed(2) + '%' : '0%',
     };
   });
 
+  // Export Excel & PDF (opsional: sesuaikan field jika perlu)
   const exportExcel = () => {
     try {
-      const wsData = products.map((product) => ({
-        'Kode Produk': product.code || '-',
-        'Nama Produk': product.name || '-',
-        Kategori: product.category?.name || '-',
-        Harga: product.price || 0,
-        Stok: product.stock || 0,
-        'Nilai Persediaan': (product.price || 0) * (product.stock || 0),
-        Terjual: product.sold_quantity || 0,
-        'Status Stok': (product.stock || 0) < 10 ? 'Rendah' : 'Normal',
-        'Dibuat Pada': product.created_at || '-',
-        'Diupdate Pada': product.updated_at || '-',
+      const wsData = productSales.map((product) => ({
+        'Kode Produk': product.product_code || '-',
+        'Nama Produk': product.product_name || '-',
+        Kategori: product.category_name || '-',
+        'Stok Saat Ini': product.current_stock || 0,
+        'Terjual': product.total_quantity_sold || 0,
+        'Pendapatan': product.total_revenue || 0,
+        'Harga Beli': product.purchase_price || 0,
+        'Harga Jual': product.selling_price || 0,
       }));
 
       const wsCategoryData = productsByCategory.map((item) => ({
@@ -85,13 +73,12 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
         ['Tanggal Laporan', new Date().toLocaleDateString('id-ID')],
         [''],
         ['Total Produk', totalProducts],
-        ['Total Kategori', totalCategories],
-        ['Total Stok', totalStock],
-        ['Total Nilai Persediaan', totalValue],
+        ['Total Stok', productSales.reduce((sum, p) => sum + (p.current_stock || 0), 0)],
+        ['Total Nilai Persediaan', totalStockValue],
+        ['Total Terjual', totalQuantitySold],
+        ['Total Pendapatan', totalRevenue],
         ['Produk Stok Rendah', lowStockProducts.length],
-        ['Produk Terlaris', bestSellingProducts[0]?.name || '-'],
-        ['Produk Termahal', mostExpensiveProduct?.name || '-'],
-        ['Produk Termurah', cheapestProduct?.name || '-'],
+        ['Produk Terlaris', bestSellingProducts[0]?.product_name || '-'],
       ]);
 
       const wb = XLSX.utils.book_new();
@@ -120,9 +107,9 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
       doc.setFontSize(10);
       doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 14, 25);
       doc.text(`Total Produk: ${totalProducts}`, 14, 30);
-      doc.text(`Total Kategori: ${totalCategories}`, 14, 35);
-      doc.text(`Total Stok: ${totalStock}`, 14, 40);
-      doc.text(`Total Nilai Persediaan: Rp ${totalValue.toLocaleString('id-ID')}`, 14, 45);
+      doc.text(`Total Nilai Persediaan: Rp ${totalStockValue.toLocaleString('id-ID')}`, 14, 35);
+      doc.text(`Total Terjual: ${totalQuantitySold}`, 14, 40);
+      doc.text(`Total Pendapatan: Rp ${totalRevenue.toLocaleString('id-ID')}`, 14, 45);
       doc.text(`Produk Stok Rendah: ${lowStockProducts.length}`, 14, 50);
 
       doc.addPage();
@@ -147,13 +134,13 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
         doc.text('Produk dengan Stok Rendah (<10)', 14, 15);
         autoTable(doc, {
           startY: 20,
-          head: [['Kode', 'Nama Produk', 'Kategori', 'Stok', 'Harga']],
+          head: [['Kode', 'Nama Produk', 'Kategori', 'Stok', 'Harga Jual']],
           body: lowStockProducts.map((product) => [
-            product.code || '-',
-            product.name || '-',
-            product.category?.name || '-',
-            product.stock || 0,
-            `Rp ${(product.price || 0).toLocaleString('id-ID')}`,
+            product.product_code || '-',
+            product.product_name || '-',
+            product.category_name || '-',
+            product.current_stock || 0,
+            `Rp ${(product.selling_price || 0).toLocaleString('id-ID')}`,
           ]),
           styles: { fontSize: 8 },
         });
@@ -164,12 +151,12 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
       doc.text('10 Produk Terlaris', 14, 15);
       autoTable(doc, {
         startY: 20,
-        head: [['Nama Produk', 'Kategori', 'Terjual', 'Harga']],
+        head: [['Nama Produk', 'Kategori', 'Terjual', 'Harga Jual']],
         body: bestSellingProducts.map((product) => [
-          product.name || '-',
-          product.category?.name || '-',
-          product.sold_quantity || 0,
-          `Rp ${(product.price || 0).toLocaleString('id-ID')}`,
+          product.product_name || '-',
+          product.category_name || '-',
+          product.total_quantity_sold || 0,
+          `Rp ${(product.selling_price || 0).toLocaleString('id-ID')}`,
         ]),
         styles: { fontSize: 8 },
       });
@@ -192,14 +179,14 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
             <button
               onClick={exportExcel}
               className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
-              disabled={products.length === 0}
+              disabled={productSales.length === 0}
             >
               Export Excel
             </button>
             <button
               onClick={exportPDF}
               className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
-              disabled={products.length === 0}
+              disabled={productSales.length === 0}
             >
               Export PDF
             </button>
@@ -208,9 +195,9 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <StatBox title="Total Produk" value={totalProducts} color="blue" />
-          <StatBox title="Total Kategori" value={totalCategories} color="purple" />
-          <StatBox title="Total Stok" value={totalStock} color="orange" />
-          <StatBox title="Total Nilai Persediaan" value={`Rp ${totalValue.toLocaleString('id-ID')}`} color="green" />
+          <StatBox title="Total Nilai Persediaan" value={`Rp ${totalStockValue.toLocaleString('id-ID')}`} color="green" />
+          <StatBox title="Total Terjual" value={totalQuantitySold} color="orange" />
+          <StatBox title="Total Pendapatan" value={`Rp ${totalRevenue.toLocaleString('id-ID')}`} color="purple" />
         </div>
 
         <Section title={`Produk dengan Stok Rendah (${lowStockProducts.length})`}>
@@ -218,13 +205,13 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
             <p className="text-center py-4 text-gray-500">Tidak ada produk dengan stok rendah.</p>
           ) : (
             <Table
-              columns={['Kode', 'Nama Produk', 'Kategori', 'Stok', 'Harga']}
+              columns={['Kode', 'Nama Produk', 'Kategori', 'Stok', 'Harga Jual']}
               data={lowStockProducts.map((product) => [
-                product.code || '-',
-                product.name || '-',
-                product.category?.name || '-',
-                product.stock || 0,
-                `Rp ${(product.price || 0).toLocaleString('id-ID')}`,
+                product.product_code || '-',
+                product.product_name || '-',
+                product.category_name || '-',
+                product.current_stock || 0,
+                `Rp ${(product.selling_price || 0).toLocaleString('id-ID')}`,
               ])}
             />
           )}
@@ -235,12 +222,12 @@ export default function ProductReport({ auth, products = [], categories = [] }) 
             <p className="text-center py-4 text-gray-500">Data produk terlaris tidak tersedia.</p>
           ) : (
             <Table
-              columns={['Nama Produk', 'Kategori', 'Terjual', 'Harga']}
+              columns={['Nama Produk', 'Kategori', 'Terjual', 'Harga Jual']}
               data={bestSellingProducts.map((product) => [
-                product.name || '-',
-                product.category?.name || '-',
-                product.sold_quantity || 0,
-                `Rp ${(product.price || 0).toLocaleString('id-ID')}`,
+                product.product_name || '-',
+                product.category_name || '-',
+                product.total_quantity_sold || 0,
+                `Rp ${(product.selling_price || 0).toLocaleString('id-ID')}`,
               ])}
             />
           )}
