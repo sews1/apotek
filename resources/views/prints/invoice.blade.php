@@ -254,10 +254,10 @@
         </table>
 
         <table class="summary">
-            <tr>
+            {{-- <tr>
                 <td>Subtotal</td>
                 <td>Rp {{ number_format($sale->subtotal, 0, ',', '.') }}</td>
-            </tr>
+            </tr> --}}
             @if ($sale->discount > 0)
                 <tr>
                     <td>Diskon</td>

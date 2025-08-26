@@ -52,7 +52,7 @@ class ProductController extends Controller
                 $this->applyStockStatusFilter($q, $status);
             });
 
-        $products = $query->latest()->paginate(10)->withQueryString();
+        $products = $query->latest()->paginate(100)->withQueryString();
 
         return Inertia::render('Products/Index', [
             'auth' => [
@@ -354,5 +354,30 @@ class ProductController extends Controller
             'selling_price' => $product->selling_price,
             'total_sold' => $soldQuantity ?? $product->sold_quantity,
         ];
+    }
+
+    public function generateCode(Request $request)
+    {
+        $request->validate([
+            'category_id' => 'required|exists:categories,id'
+        ]);
+
+        $category = Category::findOrFail($request->category_id);
+
+        // Jika ada last_code, gunakan sebagai referensi
+        if ($category->last_code) {
+            $lastNumber = (int) substr($category->last_code, 4); 
+            $newNumber = $lastNumber + 1;
+            $newCode = $category->kode_prefix . '-' . str_pad($newNumber, 3, '0', STR_PAD_LEFT);
+        } else {
+            // Jika tidak ada last_code, mulai dari 001
+            $newCode = $category->kode_prefix . '-00';
+        }
+
+        return response()->json([
+            'success' => true,
+            'code' => $newCode,
+            'prefix' => $category->kode_prefix
+        ]);
     }
 }

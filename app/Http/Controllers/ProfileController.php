@@ -3,502 +3,233 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rules\Password;
-use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
-use Carbon\Carbon;
 
 class ProfileController extends Controller
 {
     /**
-     * Display the user's profile form.
+     * Display the user's profile page.
      */
-    public function edit(Request $request): Response
+    public function index(Request $request): Response
     {
         $user = $request->user();
-        
+
+        // Jika role = owner, ambil daftar user
+        $users = [];
+        if ($user->role === 'owner') {
+            $users = User::where('id', '!=', $user->id)
+                ->select('id', 'name', 'email', 'role', 'created_at')
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($u) {
+                    return [
+                        'id' => $u->id,
+                        'name' => $u->name,
+                        'email' => $u->email,
+                        'role' => $u->role,
+                        'created_at' => $u->created_at->format('d M Y'),
+                    ];
+                });
+        }
+
         return Inertia::render('Profile/Edit', [
-            'mustVerifyEmail' => $user instanceof MustVerifyEmail,
             'status' => session('status'),
             'flash' => [
                 'success' => session('success'),
                 'error' => session('error'),
             ],
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'avatar' => $user->avatar,
-                'email_verified_at' => $user->email_verified_at,
-                'created_at' => $user->created_at,
-                'updated_at' => $user->updated_at,
-                'last_login_at' => $user->last_login_at ?? now(),
-                'two_factor_enabled' => $user->two_factor_secret ? true : false,
-            ],
-            'statistics' => [
-                'security_score' => $this->calculateSecurityScore($user),
-                'active_sessions' => $this->getActiveSessionsCount($user),
-                'last_login' => $this->getLastLoginInfo($user),
+            'users' => $users, // Hanya ada data jika owner
+            'auth' => [
+                'user' => $user,
+                'canManageUsers' => $user->role === 'owner', // Flag untuk frontend
             ],
         ]);
     }
 
     /**
-     * Update the user's profile information.
+     * Update the authenticated user's profile.
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
         try {
             $user = $request->user();
-            $validated = $request->validated();
 
-            // Handle profile picture upload if exists
-            if ($request->hasFile('avatar')) {
-                $this->handleAvatarUpload($request, $user);
-            }
+            $user->name = $request->name;
+            $user->email = $request->email;
 
-            // Fill validated data
-            $user->fill($validated);
-
-            // If email is being changed, reset email verification
             if ($user->isDirty('email')) {
                 $user->email_verified_at = null;
-                
-                // Send email verification notification
-                if ($user instanceof MustVerifyEmail) {
-                    $user->sendEmailVerificationNotification();
-                }
             }
 
             $user->save();
 
-            // Log profile update activity
-            activity()
-                ->causedBy($user)
-                ->performedOn($user)
-                ->withProperties([
-                    'ip_address' => $request->ip(),
-                    'user_agent' => $request->userAgent(),
-                    'changes' => $user->getChanges(),
-                ])
-                ->log('Profile information updated');
-
-            return Redirect::route('profile.edit')
-                ->with('success', 'Profile berhasil diperbarui!')
+            return Redirect::route('profile.index')
+                ->with('success', 'Profil berhasil diperbarui!')
                 ->with('status', 'profile-updated');
 
         } catch (\Exception $e) {
             \Log::error('Profile update failed', [
                 'user_id' => $request->user()->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
             ]);
 
-            return Redirect::route('profile.edit')
-                ->with('error', 'Terjadi kesalahan saat memperbarui profile: ' . $e->getMessage());
+            return Redirect::route('profile.index')
+                ->with('error', 'Terjadi kesalahan saat memperbarui profil.');
         }
     }
 
     /**
-     * Update the user's password.
+     * Update user password.
      */
     public function updatePassword(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'current_password' => ['required', 'current_password'],
-            'password' => ['required', Password::defaults(), 'confirmed'],
-        ], [
-            'current_password.required' => 'Password saat ini wajib diisi.',
-            'current_password.current_password' => 'Password saat ini tidak benar.',
-            'password.required' => 'Password baru wajib diisi.',
-            'password.confirmed' => 'Konfirmasi password tidak cocok.',
+        $request->validate([
+            'current_password' => ['required'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
         try {
             $user = $request->user();
-            $user->update([
-                'password' => Hash::make($validated['password']),
-                'password_changed_at' => now(),
-            ]);
 
-            // Invalidate all other sessions except current
-            Auth::logoutOtherDevices($validated['password']);
+            if (!Hash::check($request->current_password, $user->password)) {
+                return Redirect::route('profile.index')
+                    ->with('error', 'Password lama tidak sesuai.');
+            }
 
-            // Log password change activity
-            activity()
-                ->causedBy($user)
-                ->performedOn($user)
-                ->withProperties([
-                    'ip_address' => $request->ip(),
-                    'user_agent' => $request->userAgent(),
-                ])
-                ->log('Password changed');
+            $user->password = Hash::make($request->password);
+            $user->save();
 
-            // Send security notification email
-            $this->sendSecurityNotification($user, 'Password berhasil diubah');
-
-            return Redirect::route('profile.edit')
-                ->with('success', 'Password berhasil diperbarui!')
-                ->with('status', 'password-updated');
+            return Redirect::route('profile.index')
+                ->with('success', 'Password berhasil diperbarui!');
 
         } catch (\Exception $e) {
             \Log::error('Password update failed', [
                 'user_id' => $request->user()->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
-            return Redirect::route('profile.edit')
-                ->with('error', 'Terjadi kesalahan saat memperbarui password: ' . $e->getMessage());
+            return Redirect::route('profile.index')
+                ->with('error', 'Terjadi kesalahan saat memperbarui password.');
         }
     }
 
     /**
-     * Delete the user's account.
+     * Create new user (owner only).
      */
-    public function destroy(Request $request): RedirectResponse
+    public function storeUser(Request $request): RedirectResponse
     {
+        if ($request->user()->role !== 'owner') {
+            return Redirect::route('profile.index')
+                ->with('error', 'Anda tidak memiliki izin untuk membuat pengguna baru.');
+        }
+
         $request->validate([
-            'password' => ['required', 'current_password'],
-        ], [
-            'password.required' => 'Password wajib diisi untuk menghapus akun.',
-            'password.current_password' => 'Password tidak benar.',
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+            'role' => 'required|in:admin,warehouse,owner',
         ]);
 
         try {
-            $user = $request->user();
+            User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'role' => $request->role,
+            ]);
 
-            // Log account deletion activity before deleting
-            activity()
-                ->causedBy($user)
-                ->performedOn($user)
-                ->withProperties([
-                    'ip_address' => $request->ip(),
-                    'user_agent' => $request->userAgent(),
-                    'user_data' => $user->toArray(),
-                ])
-                ->log('Account deleted');
+            return Redirect::route('profile.index')
+                ->with('success', 'Pengguna berhasil ditambahkan!');
 
-            // Delete user's files/avatar if exists
-            if ($user->avatar && Storage::exists($user->avatar)) {
-                Storage::delete($user->avatar);
+        } catch (\Exception $e) {
+            \Log::error('User creation failed', [
+                'error' => $e->getMessage()
+            ]);
+
+            return Redirect::route('profile.index')
+                ->with('error', 'Terjadi kesalahan saat menambahkan pengguna.');
+        }
+    }
+
+    /**
+     * Update user data (owner only).
+     */
+    public function updateUser(Request $request, $id): RedirectResponse
+    {
+        if ($request->user()->role !== 'owner') {
+            return Redirect::route('profile.index')
+                ->with('error', 'Anda tidak memiliki izin untuk mengupdate pengguna.');
+        }
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => "required|string|email|max:255|unique:users,email,{$id}",
+            'role' => 'required|in:admin,warehouse,owner',
+            'password' => 'nullable|string|min:8|confirmed',
+        ]);
+
+        try {
+            $user = User::findOrFail($id);
+            $user->name = $request->name;
+            $user->email = $request->email;
+            $user->role = $request->role;
+
+            if ($request->filled('password')) {
+                $user->password = Hash::make($request->password);
             }
 
-            // Send account deletion confirmation email
-            $this->sendSecurityNotification($user, 'Akun Anda telah dihapus');
+            $user->save();
 
-            // Logout user
-            Auth::logout();
+            return Redirect::route('profile.index')
+                ->with('success', 'Pengguna berhasil diperbarui!');
 
-            // Delete user account
+        } catch (\Exception $e) {
+            \Log::error('User update failed', [
+                'user_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+
+            return Redirect::route('profile.index')
+                ->with('error', 'Terjadi kesalahan saat mengupdate pengguna.');
+        }
+    }
+
+    /**
+     * Delete a user (owner only).
+     */
+    public function destroyUser(Request $request, $id): RedirectResponse
+    {
+        if ($request->user()->role !== 'owner') {
+            return Redirect::route('profile.index')
+                ->with('error', 'Anda tidak memiliki izin untuk menghapus pengguna.');
+        }
+
+        if ($request->user()->id == $id) {
+            return Redirect::route('profile.index')
+                ->with('error', 'Anda tidak dapat menghapus akun sendiri.');
+        }
+
+        try {
+            $user = User::findOrFail($id);
             $user->delete();
 
-            // Invalidate session
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            return Redirect::to('/')
-                ->with('success', 'Akun berhasil dihapus.');
+            return Redirect::route('profile.index')
+                ->with('success', 'Pengguna berhasil dihapus!');
 
         } catch (\Exception $e) {
-            \Log::error('Account deletion failed', [
-                'user_id' => $request->user()->id,
+            \Log::error('User deletion failed', [
+                'user_id' => $id,
                 'error' => $e->getMessage()
             ]);
 
-            return Redirect::route('profile.edit')
-                ->with('error', 'Terjadi kesalahan saat menghapus akun: ' . $e->getMessage());
+            return Redirect::route('profile.index')
+                ->with('error', 'Terjadi kesalahan saat menghapus pengguna.');
         }
-    }
-
-    /**
-     * Show user profile (public view).
-     */
-    public function show(Request $request, $id = null)
-    {
-        $user = $id ? User::findOrFail($id) : $request->user();
-        
-        return Inertia::render('Profile/Show', [
-            'user' => $user->only(['id', 'name', 'email', 'avatar', 'created_at']),
-            'isOwnProfile' => $request->user()->id === $user->id,
-        ]);
-    }
-
-    /**
-     * Handle avatar upload.
-     */
-    private function handleAvatarUpload(Request $request, $user): void
-    {
-        $request->validate([
-            'avatar' => ['image', 'mimes:jpeg,png,jpg,gif', 'max:2048'],
-        ], [
-            'avatar.image' => 'File harus berupa gambar.',
-            'avatar.mimes' => 'Format gambar harus jpeg, png, jpg, atau gif.',
-            'avatar.max' => 'Ukuran gambar maksimal 2MB.',
-        ]);
-
-        // Delete old avatar if exists
-        if ($user->avatar && Storage::exists($user->avatar)) {
-            Storage::delete($user->avatar);
-        }
-
-        // Store new avatar with optimized filename
-        $filename = 'avatar_' . $user->id . '_' . time() . '.' . $request->file('avatar')->getClientOriginalExtension();
-        $avatarPath = $request->file('avatar')->storeAs('avatars', $filename, 'public');
-        
-        $user->avatar = $avatarPath;
-    }
-
-    /**
-     * Remove user avatar.
-     */
-    public function removeAvatar(Request $request): RedirectResponse
-    {
-        try {
-            $user = $request->user();
-
-            if ($user->avatar && Storage::exists($user->avatar)) {
-                Storage::delete($user->avatar);
-            }
-
-            $user->update(['avatar' => null]);
-
-            // Log avatar removal
-            activity()
-                ->causedBy($user)
-                ->performedOn($user)
-                ->log('Avatar removed');
-
-            return Redirect::route('profile.edit')
-                ->with('success', 'Foto profil berhasil dihapus!');
-
-        } catch (\Exception $e) {
-            return Redirect::route('profile.edit')
-                ->with('error', 'Terjadi kesalahan saat menghapus foto profil.');
-        }
-    }
-
-    /**
-     * Resend email verification.
-     */
-    public function resendVerification(Request $request): RedirectResponse
-    {
-        $user = $request->user();
-
-        if ($user->hasVerifiedEmail()) {
-            return Redirect::route('profile.edit')
-                ->with('error', 'Email sudah terverifikasi.');
-        }
-
-        $user->sendEmailVerificationNotification();
-
-        // Log verification resend
-        activity()
-            ->causedBy($user)
-            ->performedOn($user)
-            ->log('Email verification resent');
-
-        return Redirect::route('profile.edit')
-            ->with('success', 'Link verifikasi email telah dikirim!');
-    }
-
-    /**
-     * Download user data (GDPR compliance).
-     */
-    public function downloadData(Request $request)
-    {
-        $user = $request->user();
-        
-        $userData = [
-            'profile' => $user->toArray(),
-            'created_at' => $user->created_at->toISOString(),
-            'updated_at' => $user->updated_at->toISOString(),
-            'activities' => activity()
-                ->causedBy($user)
-                ->get()
-                ->map(function ($activity) {
-                    return [
-                        'description' => $activity->description,
-                        'created_at' => $activity->created_at->toISOString(),
-                        'properties' => $activity->properties,
-                    ];
-                }),
-            'export_date' => now()->toISOString(),
-        ];
-
-        $fileName = 'user_data_' . $user->id . '_' . now()->format('Y-m-d') . '.json';
-
-        // Log data download
-        activity()
-            ->causedBy($user)
-            ->performedOn($user)
-            ->log('User data downloaded');
-
-        return response()->json($userData)
-            ->header('Content-Disposition', 'attachment; filename="' . $fileName . '"')
-            ->header('Content-Type', 'application/json');
-    }
-
-    /**
-     * Update notification preferences.
-     */
-    public function updateNotifications(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'email_notifications' => 'boolean',
-            'security_alerts' => 'boolean',
-            'marketing' => 'boolean',
-            'newsletter' => 'boolean',
-        ]);
-
-        try {
-            $user = $request->user();
-            $user->update([
-                'notification_preferences' => json_encode($validated)
-            ]);
-
-            activity()
-                ->causedBy($user)
-                ->performedOn($user)
-                ->withProperties(['preferences' => $validated])
-                ->log('Notification preferences updated');
-
-            return Redirect::route('profile.edit')
-                ->with('success', 'Preferensi notifikasi berhasil diperbarui!');
-
-        } catch (\Exception $e) {
-            return Redirect::route('profile.edit')
-                ->with('error', 'Terjadi kesalahan saat memperbarui preferensi.');
-        }
-    }
-
-    /**
-     * Update privacy settings.
-     */
-    public function updatePrivacy(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'profile_visibility' => 'required|in:public,friends,private',
-            'email_visibility' => 'required|in:public,friends,private',
-            'activity_status' => 'required|in:active,inactive',
-        ]);
-
-        try {
-            $user = $request->user();
-            $user->update([
-                'privacy_settings' => json_encode($validated)
-            ]);
-
-            activity()
-                ->causedBy($user)
-                ->performedOn($user)
-                ->withProperties(['settings' => $validated])
-                ->log('Privacy settings updated');
-
-            return Redirect::route('profile.edit')
-                ->with('success', 'Pengaturan privasi berhasil diperbarui!');
-
-        } catch (\Exception $e) {
-            return Redirect::route('profile.edit')
-                ->with('error', 'Terjadi kesalahan saat memperbarui pengaturan privasi.');
-        }
-    }
-
-    /**
-     * Logout from all other devices.
-     */
-    public function logoutOtherDevices(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'password' => ['required', 'current_password'],
-        ]);
-
-        Auth::logoutOtherDevices($request->password);
-
-        activity()
-            ->causedBy($request->user())
-            ->performedOn($request->user())
-            ->log('Logged out from all other devices');
-
-        return Redirect::route('profile.edit')
-            ->with('success', 'Berhasil logout dari semua perangkat lain.');
-    }
-
-    /**
-     * Get user's security score.
-     */
-    private function calculateSecurityScore($user): int
-    {
-        $score = 0;
-        
-        // Base score
-        $score += 20;
-        
-        // Email verified
-        if ($user->email_verified_at) {
-            $score += 20;
-        }
-        
-        // Has avatar
-        if ($user->avatar) {
-            $score += 10;
-        }
-        
-        // Password strength (assume strong if changed recently)
-        if ($user->password_changed_at && $user->password_changed_at->gt(now()->subMonths(3))) {
-            $score += 25;
-        } else {
-            $score += 15;
-        }
-        
-        // Two factor authentication
-        if ($user->two_factor_secret) {
-            $score += 25;
-        }
-        
-        return min($score, 100);
-    }
-
-    /**
-     * Get active sessions count.
-     */
-    private function getActiveSessionsCount($user): int
-    {
-        // This would typically query a sessions table
-        // For now, return 1 as current session
-        return 1;
-    }
-
-    /**
-     * Get last login information.
-     */
-    private function getLastLoginInfo($user): array
-    {
-        return [
-            'datetime' => $user->last_login_at ?? now(),
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-            'location' => 'Indonesia', // This would be determined by IP geolocation
-        ];
-    }
-
-    /**
-     * Send security notification email.
-     */
-    private function sendSecurityNotification($user, $message): void
-    {
-        // This would typically send an email notification
-        // You can implement this based on your mail system
-        \Log::info('Security notification sent', [
-            'user_id' => $user->id,
-            'message' => $message,
-        ]);
     }
 }

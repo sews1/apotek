@@ -3,18 +3,17 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import Authenticated from '@/Layouts/Authenticated';
 
 export default function Edit({ auth, category }) {
-    const { data, setData, patch, processing, errors } = useForm({
-    name: category.name || '',
-    kode_prefix: category.kode_prefix || '',
-    description: category.description || '',
-    is_active: category.is_active,
+    const { data, setData, put, processing, errors } = useForm({
+        name: category.name || '',
+        kode_prefix: category.kode_prefix || '',
+        description: category.description || '',
+        is_active: category.is_active ?? true,
     });
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        patch(route('categories.update', category.id));
+        put(route('categories.update', category.id));
     };
-
 
     return (
         <Authenticated auth={auth} header="Edit Kategori">
@@ -22,11 +21,11 @@ export default function Edit({ auth, category }) {
 
             <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="bg-white shadow-xl rounded-lg overflow-hidden">
-                    {/* Form Header */}
-                    <div className="bg-gradient-to-r from-yellow-500 to-orange-500 px-6 py-4">
+                    {/* Form Header dengan Gradien Orange */}
+                    <div className="bg-gradient-to-r from-orange-500 to-amber-600 px-6 py-4">
                         <h2 className="text-xl font-semibold text-white">Edit Kategori</h2>
-                        <p className="mt-1 text-sm text-yellow-100">
-                            Ubah informasi kategori produk di bawah ini
+                        <p className="mt-1 text-sm text-orange-100">
+                            Perbarui informasi kategori produk
                         </p>
                     </div>
 
@@ -42,7 +41,7 @@ export default function Edit({ auth, category }) {
                                         <input
                                             type="text"
                                             id="name"
-                                            className={`block w-full rounded-md ${errors.name ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : 'border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
+                                            className={`block w-full rounded-md ${errors.name ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : 'border-gray-300 shadow-sm focus:ring-orange-500 focus:border-orange-500'} sm:text-sm`}
                                             value={data.name}
                                             onChange={(e) => setData('name', e.target.value)}
                                             placeholder="Contoh: Obat Bebas"
@@ -69,7 +68,7 @@ export default function Edit({ auth, category }) {
                                         <input
                                             type="text"
                                             id="kode_prefix"
-                                            className={`block w-full rounded-md uppercase ${errors.kode_prefix ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : 'border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500'} sm:text-sm`}
+                                            className={`block w-full rounded-md uppercase ${errors.kode_prefix ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : 'border-gray-300 shadow-sm focus:ring-orange-500 focus:border-orange-500'} sm:text-sm`}
                                             value={data.kode_prefix}
                                             onChange={(e) => setData('kode_prefix', e.target.value.toUpperCase())}
                                             placeholder="Contoh: OBB"
@@ -97,7 +96,7 @@ export default function Edit({ auth, category }) {
                                         <textarea
                                             id="description"
                                             rows={3}
-                                            className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border border-gray-300 rounded-md"
+                                            className="shadow-sm focus:ring-orange-500 focus:border-orange-500 block w-full sm:text-sm border border-gray-300 rounded-md"
                                             value={data.description}
                                             onChange={(e) => setData('description', e.target.value)}
                                             placeholder="Deskripsi kategori (opsional)"
@@ -114,7 +113,7 @@ export default function Edit({ auth, category }) {
                                                 id="is_active"
                                                 name="is_active"
                                                 type="checkbox"
-                                                className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                                                className="focus:ring-orange-500 h-4 w-4 text-orange-600 border-gray-300 rounded"
                                                 checked={data.is_active}
                                                 onChange={(e) => setData('is_active', e.target.checked)}
                                             />
@@ -134,14 +133,14 @@ export default function Edit({ auth, category }) {
                         <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
                             <Link
                                 href={route('categories.index')}
-                                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
                             >
                                 Batal
                             </Link>
                             <button
                                 type="submit"
                                 disabled={processing}
-                                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 ${
+                                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 ${
                                     processing ? 'opacity-70 cursor-not-allowed' : ''
                                 }`}
                             >
@@ -154,7 +153,7 @@ export default function Edit({ auth, category }) {
                                         Menyimpan...
                                     </>
                                 ) : (
-                                    'Update Kategori'
+                                    'Perbarui Kategori'
                                 )}
                             </button>
                         </div>

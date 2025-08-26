@@ -12,19 +12,56 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class SaleController extends Controller
 {
-    public function index()
-    {
-        $sales = Sale::with(['user', 'items.product'])
-            ->filter(request()->only('search', 'date', 'status'))
-            ->latest()
-            ->paginate(10);
+public function index(Request $request)
+{
+    // Query dasar dengan eager loading
+    $baseQuery = Sale::with(['user', 'items.product']);
+    
+    // Query untuk statistik (tanpa pagination)
+    $statsQuery = (clone $baseQuery)
+        ->when($request->search, function($q) use ($request) {
+            $q->where(function($query) use ($request) {
+                $query->where('invoice_number', 'like', '%'.$request->search.'%')
+                      ->orWhere('customer_name', 'like', '%'.$request->search.'%');
+            });
+        })
+        ->when($request->payment_method, function($q) use ($request) {
+            $q->where('payment_method', $request->payment_method);
+        });
 
-        return Inertia::render('Sales/Index', [
-            'sales' => $sales,
-            'filters' => request()->all('search', 'date', 'status'),
-        ]);
-    }
+    // Hitung statistik
+    $stats = [
+        'total_transactions' => $statsQuery->count(),
+        'total_revenue' => $statsQuery->sum('total'),
+        'today_transactions' => $statsQuery->whereDate('created_at', today())->count(),
+        'today_revenue' => $statsQuery->whereDate('created_at', today())->sum('total'),
+    ];
 
+    // Hitung average transaction dengan pembagian yang aman
+    $stats['average_transaction'] = $stats['total_transactions'] > 0 
+        ? round($stats['total_revenue'] / $stats['total_transactions'])
+        : 0;
+
+    // Query untuk data pagination
+    $sales = $baseQuery
+        ->when($request->search, function($q) use ($request) {
+            $q->where(function($query) use ($request) {
+                $query->where('invoice_number', 'like', '%'.$request->search.'%')
+                      ->orWhere('customer_name', 'like', '%'.$request->search.'%');
+            });
+        })
+        ->when($request->payment_method, function($q) use ($request) {
+            $q->where('payment_method', $request->payment_method);
+        })
+        ->latest()
+        ->paginate(10);
+
+    return Inertia::render('Sales/Index', [
+        'sales' => $sales,
+        'stats' => $stats,
+        'filters' => $request->only(['search', 'payment_method']),
+    ]);
+}
     public function create()
     {
         $products = Product::select('id', 'name', 'code', 'selling_price', 'stock')

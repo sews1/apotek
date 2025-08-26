@@ -12,17 +12,20 @@ class CategorySeeder extends Seeder
         $categories = [
             [
                 'name' => 'Obat Bebas',
-                'kode_prefix' => 'OBB',
+                'kode_prefix' => 'OBS',
+                'last_code' => 'OBS-012',
                 'description' => 'Obat yang bisa dibeli tanpa resep dokter',
             ],
             [
                 'name' => 'Obat Bebas Terbatas',
                 'kode_prefix' => 'OBT',
+                'last_code' => 'OBT-005',
                 'description' => 'Obat dengan batasan tertentu',
             ],
             [
                 'name' => 'Obat Keras',
                 'kode_prefix' => 'OBK',
+                'last_code' => 'OBK-001',
                 'description' => 'Obat yang memerlukan resep dokter',
             ],
             [

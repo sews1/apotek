@@ -15,32 +15,38 @@ class CategoryController extends Controller
      *
      * @return \Inertia\Response
      */
-    public function index()
-    {
-        $filters = request()->only('search', 'trashed');
-        $query = Category::query()->withCount('products');
+public function index()
+{
+    $filters = request()->only('search', 'status'); // Ganti 'trashed' menjadi 'status'
+    $query = Category::query()->withCount('products');
 
-        // Search functionality
-        if (!empty($filters['search'])) {
-            $searchTerm = '%' . $filters['search'] . '%';
-            $query->where(function($q) use ($searchTerm) {
-                $q->where('name', 'like', $searchTerm)
-                  ->orWhere('kode_prefix', 'like', $searchTerm)
-                  ->orWhere('description', 'like', $searchTerm);
-            });
-        }
-
-        // Filter by status
-        $this->applyStatusFilter($query, $filters['trashed'] ?? null);
-
-        $categories = $query->latest('updated_at')->paginate(15)->withQueryString();
-
-        return Inertia::render('Categories/Index', [
-            'categories' => $categories,
-            'filters' => $filters,
-            'statistics' => $this->getCategoryStatistics(),
-        ]);
+    // Search functionality
+    if (!empty($filters['search'])) {
+        $searchTerm = '%' . $filters['search'] . '%';
+        $query->where(function($q) use ($searchTerm) {
+            $q->where('name', 'like', $searchTerm)
+              ->orWhere('kode_prefix', 'like', $searchTerm)
+              ->orWhere('description', 'like', $searchTerm);
+        });
     }
+
+    // Filter by status - perbaikan bagian ini
+    if (!empty($filters['status'])) {
+        if ($filters['status'] === 'active') {
+            $query->where('is_active', true);
+        } elseif ($filters['status'] === 'inactive') {
+            $query->where('is_active', false);
+        }
+    }
+
+    $categories = $query->latest('updated_at')->paginate(15)->withQueryString();
+
+    return Inertia::render('Categories/Index', [
+        'categories' => $categories,
+        'filters' => $filters,
+        'statistics' => $this->getCategoryStatistics(),
+    ]);
+}
 
     /**
      * Show the form for creating a new pharmacy category.

@@ -1,6 +1,8 @@
 import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import Authenticated from '@/Layouts/Authenticated';
+import Swal from 'sweetalert2';
+import { toast } from 'react-hot-toast';
 
 const hasPermission = (user, permission) =>
   user?.roles?.some(role => role.permissions.includes(permission));
@@ -87,11 +89,10 @@ const CategoryTableRow = ({ category, handleDelete, canEdit, canDelete, auth }) 
               </svg>
               Edit
             </Link>
+            
             <button
               onClick={() => handleDelete(category.id, category.name)}
               className="inline-flex items-center px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-md transition-colors duration-150 text-sm font-medium"
-              disabled={category.products_count > 0}
-              title={category.products_count > 0 ? 'Tidak dapat menghapus kategori yang memiliki produk' : 'Hapus kategori'}
             >
               <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -282,13 +283,12 @@ const FilterCard = ({ filters, handleFilter }) => (
         <select
           id="status"
           className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors duration-150"
-          value={filters.trashed || ''}
-          onChange={e => handleFilter('trashed', e.target.value)}
+          value={filters.status || ''}
+          onChange={e => handleFilter('status', e.target.value)}
         >
           <option value="">Semua Status</option>
-          <option value="only">Hanya Aktif</option>
-          <option value="with">Termasuk Tidak Aktif</option>
-          <option value="only_trashed">Hanya yang Dihapus</option>
+          <option value="active">Hanya Aktif</option>
+          <option value="inactive">Hanya Tidak Aktif</option>
         </select>
       </div>
     </div>
@@ -322,43 +322,35 @@ export default function Index({ auth, categories, filters }) {
   };
 
   const handleDelete = async (id, name) => {
-    const result = await Swal.fire({
-      title: 'Konfirmasi Hapus Kategori',
-      text: `Apakah Anda yakin ingin menghapus kategori "${name}"? Tindakan ini tidak dapat dibatalkan.`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Ya, Hapus',
-      cancelButtonText: 'Batal',
-      confirmButtonColor: '#dc2626',
-      cancelButtonColor: '#64748b',
-      reverseButtons: true,
-      backdrop: true,
-      allowOutsideClick: false
-    });
-
-    if (result.isConfirmed) {
-      router.delete(route('categories.destroy', id), {
-        onSuccess: () => {
-          toast.success('Kategori berhasil dihapus');
-          Swal.fire({
-            title: 'Berhasil!',
-            text: 'Kategori telah dihapus dari sistem.',
-            icon: 'success',
-            timer: 2000,
-            showConfirmButton: false
-          });
-        },
-        onError: (errors) => {
-          const errorMessage = errors.message || 'Gagal menghapus kategori';
-          toast.error(errorMessage);
-          Swal.fire({
-            title: 'Gagal!',
-            text: errorMessage,
-            icon: 'error',
-            confirmButtonText: 'OK'
-          });
-        },
+    try {
+      const result = await Swal.fire({
+        title: 'Konfirmasi Hapus Kategori',
+        text: `Apakah Anda yakin ingin menghapus kategori "${name}"? Produk dalam kategori ini akan dipindahkan ke kategori "Uncategorized".`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Hapus',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+        backdrop: true,
+        allowOutsideClick: false
       });
+
+      if (result.isConfirmed) {
+        router.delete(route('categories.destroy', id), {
+          preserveScroll: true,
+          onSuccess: () => {
+            toast.success(`Kategori "${name}" berhasil dihapus`);
+          },
+          onError: () => {
+            toast.error('Gagal menghapus kategori');
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error in handleDelete:', error);
+      toast.error('Terjadi kesalahan saat menghapus kategori');
     }
   };
 

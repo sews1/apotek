@@ -83,7 +83,7 @@ export default function Show({ auth, sale }) {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {sale.items.map((item, index) => (
+                                    {sale.items?.map((item, index) => (
                                         <tr key={index} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <div className="font-medium text-gray-900">{item.product_name}</div>
@@ -103,11 +103,6 @@ export default function Show({ auth, sale }) {
                                 </tfoot>
                             </table>
                         </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="p-4 bg-gray-50 text-center text-sm text-gray-500">
-                        Transaksi diproses oleh {sale.user.name}
                     </div>
                 </div>
             </div>

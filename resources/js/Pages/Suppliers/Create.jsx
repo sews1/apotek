@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import Authenticated from '@/Layouts/Authenticated';
+import { FaArrowLeft, FaSave, FaBoxes, FaUserTie, FaPhone, FaMapMarkerAlt } from 'react-icons/fa';
 
 export default function Create({ auth }) {
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         phone: '',
         address: '',
-        item: '', // ✅ Tambah state items
+        item: '',
     });
 
     const handleSubmit = (e) => {
@@ -16,67 +17,141 @@ export default function Create({ auth }) {
     };
 
     return (
-        <Authenticated auth={auth} header="Tambah Supplier">
+        <Authenticated 
+            auth={auth}
+            header={
+                <div className="flex items-center">
+                    <h2 className="font-semibold text-xl text-gray-800 leading-tight">Tambah Supplier Baru</h2>
+                </div>
+            }
+        >
             <Head title="Tambah Supplier" />
 
-            <div className="max-w-3xl mx-auto py-6 px-4 sm:px-6 lg:px-8 bg-white shadow rounded-lg border border-gray-100">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Nama Supplier</label>
-                        <input
-                            type="text"
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                            value={data.name}
-                            onChange={(e) => setData('name', e.target.value)}
-                        />
-                        {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name}</p>}
+            <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+                <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-100">
+                    {/* Form Header */}
+                    <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-500">
+                        <h3 className="text-lg font-medium text-white">Informasi Supplier</h3>
+                        <p className="mt-1 text-sm text-blue-100">Isi form berikut untuk menambahkan supplier baru</p>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">No. Telepon</label>
-                        <input
-                            type="text"
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                            value={data.phone}
-                            onChange={(e) => setData('phone', e.target.value)}
-                        />
-                        {errors.phone && <p className="text-red-600 text-sm mt-1">{errors.phone}</p>}
-                    </div>
+                    {/* Form Content */}
+                    <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                        {/* Name Field */}
+                        <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-700 flex items-center">
+                                <FaUserTie className="mr-2 text-blue-500" />
+                                Nama Supplier
+                                <span className="text-red-500 ml-1">*</span>
+                            </label>
+                            <div className="mt-1 relative rounded-md shadow-sm">
+                                <input
+                                    type="text"
+                                    className={`block w-full pr-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                                        errors.name ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : ''
+                                    }`}
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    placeholder="Contoh: PT. Sehat Selalu"
+                                />
+                            </div>
+                            {errors.name && (
+                                <p className="mt-2 text-sm text-red-600">{errors.name}</p>
+                            )}
+                        </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Alamat</label>
-                        <textarea
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                            value={data.address}
-                            onChange={(e) => setData('address', e.target.value)}
-                        />
-                        {errors.address && <p className="text-red-600 text-sm mt-1">{errors.address}</p>}
-                    </div>
+                        {/* Phone Field */}
+                        <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-700 flex items-center">
+                                <FaPhone className="mr-2 text-blue-500" />
+                                Nomor Telepon
+                            </label>
+                            <div className="mt-1 relative rounded-md shadow-sm">
+                                <input
+                                    type="text"
+                                    className={`block w-full pr-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                                        errors.phone ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : ''
+                                    }`}
+                                    value={data.phone}
+                                    onChange={(e) => setData('phone', e.target.value)}
+                                    placeholder="Contoh: 081234567890"
+                                />
+                            </div>
+                            {errors.phone && (
+                                <p className="mt-2 text-sm text-red-600">{errors.phone}</p>
+                            )}
+                        </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Items</label>
-                        <textarea
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-                            placeholder="Pisahkan item dengan koma, misal: Paracetamol, Vitamin C"
-                            value={data.item}
-                            onChange={(e) => setData('item', e.target.value)}
-                        />
-                        {errors.item && <p className="text-red-600 text-sm mt-1">{errors.item}</p>}
-                    </div>
+                        {/* Address Field */}
+                        <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-700 flex items-center">
+                                <FaMapMarkerAlt className="mr-2 text-blue-500" />
+                                Alamat
+                            </label>
+                            <div className="mt-1">
+                                <textarea
+                                    rows={3}
+                                    className={`shadow-sm block w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                                        errors.address ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : ''
+                                    }`}
+                                    value={data.address}
+                                    onChange={(e) => setData('address', e.target.value)}
+                                    placeholder="Alamat lengkap supplier"
+                                />
+                            </div>
+                            {errors.address && (
+                                <p className="mt-2 text-sm text-red-600">{errors.address}</p>
+                            )}
+                        </div>
 
-                    <div className="flex justify-between">
-                        <Link href={route('suppliers.index')} className="text-blue-600 hover:underline">
-                            ← Kembali
-                        </Link>
-                        <button
-                            type="submit"
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                            disabled={processing}
-                        >
-                            Simpan
-                        </button>
-                    </div>
-                </form>
+                        {/* Items Field */}
+                        <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-700 flex items-center">
+                                <FaBoxes className="mr-2 text-blue-500" />
+                                Barang yang Disuplai
+                                <span className="text-red-500 ml-1">*</span>
+                            </label>
+                            <div className="mt-1">
+                                <textarea
+                                    rows={3}
+                                    className={`shadow-sm block w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                                        errors.item ? 'border-red-300 text-red-900 placeholder-red-300 focus:outline-none focus:ring-red-500 focus:border-red-500' : ''
+                                    }`}
+                                    value={data.item}
+                                    onChange={(e) => setData('item', e.target.value)}
+                                    placeholder="Pisahkan dengan koma, contoh: Paracetamol, Vitamin C, Masker Medis"
+                                />
+                            </div>
+                            <p className="mt-2 text-sm text-gray-500">
+                                Masukkan daftar produk yang disediakan oleh supplier ini
+                            </p>
+                            {errors.item && (
+                                <p className="mt-2 text-sm text-red-600">{errors.item}</p>
+                            )}
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="flex justify-between pt-6 border-t border-gray-200">
+                            <Link 
+                                href={route('suppliers.index')} 
+                                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            >
+                                <FaArrowLeft className="mr-2" />
+                                Kembali
+                            </Link>
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                                    processing ? 'opacity-75 cursor-not-allowed' : ''
+                                }`}
+                            >
+                                <FaSave className="mr-2" />
+                                {processing ? 'Menyimpan...' : 'Simpan Supplier'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </Authenticated>
     );
